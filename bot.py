@@ -9,15 +9,17 @@ TOKEN = os.getenv("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "ሰላም! እንኳን ደህና መጡ።\n"
-        "/bingo - ካርድ ለማውጣት\n"
-        "/call - አንድ ቁጥር ለመጥራት\n"
-        "/start_game - ጨዋታ ለመጀመር (በየ5 ሰከንዱ ይጠራል)\n"
-        "/stop - ጨዋታውን ለማቆም"
+        "🎲 **እንኳን ወደ ቢንጎ ቦት በደህና መጡ!** 🎲\n\n"
+        "📜 **የሚገኙ ትዕዛዞች:**\n"
+        "🔹 /bingo - አዲስ የቢንጎ ካርድ ለማውጣት\n"
+        "🔹 /call - አንድ ቁጥር ለመጥራት\n"
+        "🔹 /start_game - ጨዋታ ለመጀመር (በየ5 ሰከንዱ ይጠራል)\n"
+        "🔹 /stop - ጨዋታውን ለማቆም",
+        parse_mode='Markdown'
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("የሚገኙ ትዕዛዞች:\n/start\n/bingo\n/call\n/start_game\n/stop")
+    await update.message.reply_text("ℹ️ እርዳታ ለማግኘት /start ይጻፉ።")
 
 async def bingo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     b = random.sample(range(1, 16), 5)
@@ -26,14 +28,17 @@ async def bingo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     g = random.sample(range(46, 61), 5)
     o = random.sample(range(61, 76), 5)
     n[2] = "FREE"
+    
     card = "🎲 **የእርስዎ የቢንጎ ካርድ** 🎲\n\n"
-    card += "` B    I    N    G    O `\n"
-    card += "------------------------\n"
+    card += "`🅱️   ℹ️   🇳   🟢   🅾️`\n"
+    card += "`------------------------`\n"
     for row in range(5):
-        card += f"`{b[row]:2}   {i[row]:2}   {n[row]:4}   {g[row]:2}   {o[row]:2}`\n"
+        # FREE የሚለውን በዋክብት ማሳመር
+        n_display = f"⭐{n[row]}⭐" if n[row] == "FREE" else f"{n[row]:4}"
+        card += f"`{b[row]:2}   {i[row]:2}   {n_display}   {g[row]:2}   {o[row]:2}`\n"
+    
     await update.message.reply_text(card, parse_mode='Markdown')
 
-# አንድ ቁጥር ብቻ መጥራት
 async def call_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     num = random.randint(1, 75)
     if num <= 15: call = f"B-{num}"
@@ -41,9 +46,8 @@ async def call_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif num <= 45: call = f"N-{num}"
     elif num <= 60: call = f"G-{num}"
     else: call = f"O-{num}"
-    await update.message.reply_text(f"📢 የተጠራው ቁጥር: *{call}*", parse_mode='Markdown')
+    await update.message.reply_text(f"📢 የተጠራው ቁጥር: 🎯 **{call}**", parse_mode='Markdown')
 
-# በየ5 ሰከንዱ ቁጥር የሚጠራ ስራ (Auto Caller)
 async def auto_call(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     num = random.randint(1, 75)
@@ -52,24 +56,22 @@ async def auto_call(context: ContextTypes.DEFAULT_TYPE):
     elif num <= 45: call = f"N-{num}"
     elif num <= 60: call = f"G-{num}"
     else: call = f"O-{num}"
-    await context.bot.send_message(job.chat_id, text=f"📢 የተጠራው ቁጥር: *{call}*", parse_mode='Markdown')
     
-    # ቁጥሮቹን መቁጠር (ከ10 ቁጥሮች በኋላ ያቆማል)
+    await context.bot.send_message(job.chat_id, text=f"📢 የተጠራው ቁጥር: 🎯 **{call}**", parse_mode='Markdown')
+    
     job.data['count'] -= 1
     if job.data['count'] <= 0:
         job.schedule_removal()
-        await context.bot.send_message(job.chat_id, text="✅ ጨዋታው አለቀ! (10 ቁጥሮች ተጠርተዋል)")
+        await context.bot.send_message(job.chat_id, text="✅ **ጨዋታው አለቀ!** (10 ቁጥሮች ተጠርተዋል) 🏁")
 
-# ጨዋታውን መጀመር
 async def start_auto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_message.chat_id
     if context.job_queue.get_jobs_by_name(str(chat_id)):
         await update.message.reply_text("⚠️ ጨዋታ አስቀድሞ ተጀምሯል! ለማቆም /stop ይጻፉ።")
         return
     context.job_queue.run_repeating(auto_call, interval=5, first=1, chat_id=chat_id, name=str(chat_id), data={'count': 10})
-    await update.message.reply_text("🎲 ጨዋታ ተጀመረ! በየ5 ሰከንዱ አንድ ቁጥር ይጠራል (ጠቅላላ 10 ጊዜ)።\n/stop በማለት ማቆም ይችላሉ።")
+    await update.message.reply_text("🎲 **ጨዋታ ተጀመረ!** በየ5 ሰከንዱ አንድ ቁጥር ይጠራል (ጠቅላላ 10 ጊዜ)።\n/stop በማለት ማቆም ይችላሉ።", parse_mode='Markdown')
 
-# ጨዋታውን ማቆም
 async def stop_auto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_message.chat_id
     current_jobs = context.job_queue.get_jobs_by_name(str(chat_id))
@@ -78,12 +80,11 @@ async def stop_auto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     for job in current_jobs:
         job.schedule_removal()
-    await update.message.reply_text("🛑 ጨዋታው ቆመ!")
+    await update.message.reply_text("🛑 **ጨዋታው ቆመ!**", parse_mode='Markdown')
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(update.message.text)
+    await update.message.reply_text(f"💬 {update.message.text}")
 
-# ለRender የሚያስፈልገው የድረ-ገጽ ሰርቨር
 def run_dummy_server():
     port = int(os.environ.get("PORT", 8000))
     class Handler(BaseHTTPRequestHandler):
