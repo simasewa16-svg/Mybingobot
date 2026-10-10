@@ -8,7 +8,7 @@ from threading import Thread
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ⚠️ እዚህ ጋር የአንተን የቴሌግራም ID ተክለው (ከ @userinfobot ያገኘኸውን)
-ADMIN_ID = 123456789 
+ADMIN_ID = 5671366303 
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -27,6 +27,10 @@ def keep_alive():
     t.start()
 
 games = {}
+payment_settings = {
+    'price': '50 ብር',
+    'account': 'CBE 1000123456789'
+}
 
 class BingoGame:
     def __init__(self):
@@ -35,9 +39,10 @@ class BingoGame:
         self.available_numbers = self.generate_pool() 
         self.is_active = False
         self.join_open = False
-        self.card_pool = [self.generate_card() for _ in range(10)] # 10 የተለያዩ ካርዶች
-        self.pending_players = set() # ክፍያ የጠበቁ
-        self.approved_players = set() # ክፍያ የፈጸሙ
+        self.winners = [] 
+        self.card_pool = self.generate_card_pool(50) 
+        self.pending_players = set() 
+        self.approved_players = set() 
 
     def generate_pool(self):
         pool = []
@@ -49,7 +54,7 @@ class BingoGame:
         random.shuffle(pool)
         return pool
 
-    def generate_card(self):
+    def generate_single_card(self):
         card = []
         cols = [list(range(1, 16)), list(range(16, 31)), list(range(31, 46)), list(range(46, 61)), list(range(61, 76))]
         for col in cols:
@@ -57,6 +62,17 @@ class BingoGame:
         card_matrix = [[card[c][r] for c in range(5)] for r in range(5)]
         card_matrix[2][2] = "⭐"
         return card_matrix
+
+    def generate_card_pool(self, count):
+        pool = []
+        seen = set()
+        while len(pool) < count:
+            card = self.generate_single_card()
+            card_str = str(card)
+            if card_str not in seen:
+                seen.add(card_str)
+                pool.append(card)
+        return pool
 
     def format_card_for_player(self, card, called_numbers):
         text = "🎲 <b>የአንተ የቢንጎ ካርድ</b> 🎲\n\n"
@@ -84,17 +100,19 @@ class BingoGame:
         if all(str(card[i][4-i]) in called_set or card[i][4-i] == "⭐" for i in range(5)): return True
         return False
 
+# ቁጥሮችን የሚጠራው ተግባር (አሁን በራሱ አይጀምርም፣ /begin_calling ሲባል ብቻ ነው)
 def auto_call_loop(chat_id):
     game = games.get(chat_id)
     if not game: return
 
-    time.sleep(30)
-    game.join_open = False
-    bot.send_message(chat_id, "🔒 የመቀላቀል ጊዜ አልቋል! ጨዋታው አሁን ይጀመራል...")
-
     while game.is_active:
         time.sleep(5) 
         if not game.is_active: break
+        
+        if len(game.winners) > 0:
+            game.is_active = False
+            break
+
         if not game.available_numbers:
             bot.send_message(chat_id, "⚠️ ሁሉም ቁጥሮች ተጠርተዋል! ጨዋታው አልቋል።")
             game.is_active = False
@@ -106,6 +124,26 @@ def auto_call_loop(chat_id):
         bot.send_message(chat_id, f"📢 የተጠራ ቁጥር፦ 🎯 *{number}*\n\n📜 የቅርብ ጊዜ ጥሪዎች፦ {recent_calls}\n\n👉 ካርድህን ለማየት /mycard በል", parse_mode='Markdown')
 
 # ================= የአስተዳዳሪ ትዕዛዞች =================
+
+@bot.message_handler(commands=['setprice'])
+def set_price(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        price = message.text.split(' ', 1)[1]
+        payment_settings['price'] = price
+        bot.reply_to(message, f"✅ የጨዋታው ዋጋ ወደ '{price}' ተቀይሯል።")
+    except:
+        bot.reply_to(message, "እባክህ እንዲህ ጻፍ: /setprice 50 ብር")
+
+@bot.message_handler(commands=['setaccount'])
+def set_account(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        account = message.text.split(' ', 1)[1]
+        payment_settings['account'] = account
+        bot.reply_to(message, f"✅ የክፍያ አካውንት ወደ '{account}' ተቀይሯል።")
+    except:
+        bot.reply_to(message, "እባክህ እንዲህ ጻፍ: /setaccount CBE 1000123456789")
 
 @bot.message_handler(commands=['start_game'])
 def start_game(message):
@@ -122,14 +160,32 @@ def start_game(message):
     games[chat_id].is_active = True
     games[chat_id].join_open = True
     
-    bot.reply_to(message, "🎲 ጨዋታ ተጀመረ! 🎲\n\nለ30 ሰከንድ ብቻ መቀላቀል ይችላሉ!\n\n👇 ካርድ ለመምረጥ ከታች ያሉትን ቁልፎች ተጠቀሙ::")
+    bot.reply_to(message, "🎲 <b>የምዝገባ ደረጃ ተከፍቷል!</b> 🎲\n\nተጫዋቾች ካርድ መምረጥ እና ክፍያ መፈጸም ይችላሉ።\nአስተዳዳሪው ተጫዋቾችን ካጸደቀ በኋላ /begin_calling በማለት ጨዋታውን ይጀምራል።", parse_mode='HTML')
     
-    # የካርድ ምርጫ ቁልፎችን መስራት
     markup = InlineKeyboardMarkup()
-    for i in range(5): # 5 ካርዶችን ብቻ እናሳይ
+    for i in range(5):
         markup.add(InlineKeyboardButton(f"🎫 ካርድ {i+1}", callback_data=f"select_{i}"))
-    bot.send_message(chat_id, "እባክህ የምትፈልገውን ካርድ ምረጥ፦", reply_markup=markup)
+    bot.send_message(chat_id, "👇 ካርድ ለመምረጥ ከታች ያሉትን ቁልፎች ተጠቀሙ::", reply_markup=markup)
 
+@bot.message_handler(commands=['begin_calling'])
+def begin_calling(message):
+    chat_id = message.chat.id
+    if message.from_user.id != ADMIN_ID:
+        bot.reply_to(message, "⛔ ይቅርታ፣ ጨዋታውን መጀመር የሚችለው አስተዳዳሪው ብቻ ነው።")
+        return
+
+    if chat_id not in games or not games[chat_id].is_active:
+        bot.reply_to(message, "⚠️ ምንም ንቁ ጨዋታ የለም። በመጀመሪያ /start_game በል።")
+        return
+
+    game = games[chat_id]
+    if len(game.approved_players) == 0:
+        bot.reply_to(message, "⚠️ እስካሁን የጸደቀ ተጫዋች የለም! እባክህ በመጀመሪያ የክፍያ ስክሪንሾቶችን አጽድቅ።")
+        return
+
+    game.join_open = False
+    bot.reply_to(message, "▶️ ጨዋታው ተጀምሯል! ቁጥሮች በየ5 ሰከንዱ ይጠራሉ...")
+    
     thread = threading.Thread(target=auto_call_loop, args=(chat_id,))
     thread.daemon = True
     thread.start()
@@ -137,22 +193,21 @@ def start_game(message):
 @bot.message_handler(commands=['approve'])
 def approve_player(message):
     if message.from_user.id != ADMIN_ID: return
-    # የተላከው መልእክት reply ሆኖ የመጣ ከሆነ
     if message.reply_to_message:
         try:
-            # ከመልእክቱ ውስጥ የተጫዋቹን ID ማውጣት
             text = message.reply_to_message.text
             user_id = int(text.split("ID: ")[1].split("\n")[0])
             chat_id = int(text.split("Chat ID: ")[1].split("\n")[0])
             
             if chat_id in games:
                 games[chat_id].approved_players.add(user_id)
+                games[chat_id].pending_players.discard(user_id)
                 bot.reply_to(message, f"✅ ተጫዋቹ ጸድቋል! (ID: {user_id})")
                 bot.send_message(chat_id, f"✅ ክፍያዎ ተረጋግጧል! አሁን ጨዋታውን መጫወት ይችላሉ።")
             else:
                 bot.reply_to(message, "⚠️ ንቁ ጨዋታ አልተገኘም።")
         except Exception as e:
-            bot.reply_to(message, f"ስህተት: {e}")
+            bot.reply_to(message, f"ስህተት: እባክህ የተጫዋቹን የክፍያ መልእክት Reply አድርገህ /approve በል።")
     else:
         bot.reply_to(message, "እባክህ የተጫዋቹን የክፍያ መልእክት Reply አድርገህ /approve በል።")
 
@@ -164,8 +219,8 @@ def list_players(message):
     game = games[chat_id]
     
     text = "👥 <b>የተጫዋቾች ዝርዝር</b>\n\n"
-    text += f"የጸደቁ (Approved): {len(game.approved_players)}\n"
-    text += f"በመጠበቅ ላይ (Pending): {len(game.pending_players)}\n\n"
+    text += f"✅ የጸደቁ (Approved): {len(game.approved_players)}\n"
+    text += f"⏳ በመጠበቅ ላይ (Pending): {len(game.pending_players)}\n\n"
     
     for uid in game.approved_players:
         text += f"✅ ID: {uid}\n"
@@ -185,6 +240,10 @@ def stop_game(message):
 
 # ================= የተጫዋቾች ትዕዛዞች =================
 
+@bot.message_handler(commands=['join'])
+def join_fallback(message):
+    bot.reply_to(message, "👇 ካርድ ለመምረጥ ከላይ ያሉትን የካርድ ቁልፎች (🎫 ካርድ 1, 2...) ተጠቀም::")
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('select_'))
 def handle_card_selection(call):
     chat_id = call.message.chat.id
@@ -200,16 +259,20 @@ def handle_card_selection(call):
         return
 
     card_index = int(call.data.split('_')[1])
-    selected_card = game.card_pool[card_index]
-    
+    if card_index >= len(game.card_pool):
+        bot.answer_callback_query(call.id, "ይህ ካርድ አልተገኘም። እባክህ ሌላ ምረጥ።")
+        return
+        
+    selected_card = game.card_pool.pop(card_index) 
     game.players[user_id] = selected_card
     game.pending_players.add(user_id)
     
     bot.answer_callback_query(call.id, "ካርድ ተመርጧል! አሁን ክፍያ ያስፈልጋል።")
     
-    # የክፍያ መመሪያ መላክ
     payment_text = (
         "💳 <b>የክፍያ ማረጋገጫ</b>\n\n"
+        f"💰 የጨዋታው ዋጋ: <b>{payment_settings['price']}</b>\n"
+        f"🏦 የክፍያ አካውንት: <b>{payment_settings['account']}</b>\n\n"
         "እባክህ የጨዋታውን መጠን ከፍለህ የክፍያ ስክሪንሾት (Screenshot) ወደዚህ ቦት ላክ።\n"
         "አስተዳዳሪው ሲያረጋግጥ ጨዋታውን መጫወት ትችላለህ።"
     )
@@ -229,7 +292,6 @@ def handle_payment_screenshot(message):
         bot.reply_to(message, "እባክህ በመጀመሪያ ካርድ ምረጥ።")
         return
 
-    # የክፍያ ስክሪንሾቱን ለአስተዳዳሪው መላክ
     admin_text = (
         f"🔔 <b>አዲስ የክፍያ ማረጋገጫ!</b>\n\n"
         f"👤 ተጫዋች: {message.from_user.first_name}\n"
@@ -280,11 +342,21 @@ def call_bingo(message):
     game = games[chat_id]
     card = game.players[user_id]
     
+    if user_id in game.winners:
+        bot.reply_to(message, "አንተ አስቀድመህ ቢንጎ ብለሃል!")
+        return
+
     if game.check_bingo(card, game.called_numbers):
-        bot.reply_to(message, f"🎉🎉 BINGO! @{message.from_user.username} አሸንፏል! ጨዋታው አብቅቷል።")
+        game.winners.append(user_id)
+        bot.reply_to(message, f"🎉🎉 BINGO! @{message.from_user.username} አሸንፏል! (የተረጋገጠ)")
+        
+        if len(game.winners) > 1:
+            bot.send_message(chat_id, "⚠️ በርካታ አሸናፊዎች ተገኝተዋል! ሽልማቱ በእኩል ይካፈላል።")
+        
+        winners_list = "\n".join([f"🏆 {uid}" for uid in game.winners])
+        bot.send_message(ADMIN_ID, f"🏆 <b>አሸናፊ(ዎች) ተገኙ!</b>\n\n{winners_list}\n\nጨዋታው በራሱ ቆሟል።", parse_mode='HTML')
+        
         game.is_active = False 
-        # ለአስተዳዳሪውም ማሳወቅ
-        bot.send_message(ADMIN_ID, f"🏆 አሸናፊ! @{message.from_user.username} (ID: {user_id}) አሸንፏል!")
     else:
         bot.reply_to(message, "❌ ይቅርታ፣ ገና አልተሸነፍክም። ቁጥሮችህን በደንብ አረጋግጥ። (የውሸት ሙከራ ተደርጓል)")
 
