@@ -30,6 +30,9 @@ body{background:linear-gradient(180deg,#f5e6f7,#ede0f0);color:#333;min-height:10
 .called-box{background:linear-gradient(135deg,#f39c12,#e67e22);color:#fff;border-radius:14px;padding:10px 5px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100px;box-shadow:0 4px 12px rgba(243,156,18,.4)}
 .called-box .label{font-size:9px;opacity:.9;margin-bottom:4px}
 .called-box .value{font-size:36px;font-weight:700;line-height:1}
+#my-mini-cards-container{display:flex;flex-direction:column;gap:6px;max-height:230px;overflow-y:auto}
+#my-mini-cards-container::-webkit-scrollbar{width:3px}
+#my-mini-cards-container::-webkit-scrollbar-thumb{background:#c39bd3;border-radius:2px}
 .mycard-box{background:#fff;border-radius:14px;padding:8px;box-shadow:0 2px 8px rgba(0,0,0,.06);border:1px solid #e0c4e8}
 .mycard-box .title{font-size:11px;font-weight:700;color:#8e44ad;text-align:center;margin-bottom:5px}
 .bingo-header{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:3px}
@@ -53,10 +56,6 @@ body{background:linear-gradient(180deg,#f5e6f7,#ede0f0);color:#333;min-height:10
 .card-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
 .card-btn{aspect-ratio:1;background:linear-gradient(135deg,#27ae60,#1e8449);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 0 #145a32}
 .card-btn.taken{background:#ccc;color:#888;box-shadow:none;cursor:not-allowed}
-.full-card-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:10px}
-.full-card-cell{aspect-ratio:1;background:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#333;border:2px solid #e0c4e8}
-.full-card-cell.called{background:#27ae60;color:#fff;border-color:#1e8449}
-.full-card-cell.free{background:#f1c40f;color:#fff}
 .btn{width:100%;padding:14px;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-top:8px}
 .btn-bingo{background:linear-gradient(135deg,#f39c12,#e67e22);color:#fff;box-shadow:0 4px 0 #b9770e}
 .admin-panel{background:linear-gradient(135deg,#2c3e50,#1a252f);color:#ecf0f1;border-radius:14px;padding:10px;margin-top:10px;border:2px solid #e74c3c}
@@ -93,6 +92,7 @@ body{background:linear-gradient(180deg,#f5e6f7,#ede0f0);color:#333;min-height:10
 .confetti-container{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9998;overflow:hidden}
 .confetti{position:absolute;width:10px;height:10px;animation:cf 3s linear infinite}
 @keyframes cf{0%{transform:translateY(-100vh) rotate(0)}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}
+.pending-pay{background:rgba(255,255,255,.08);border:1px solid #4a6580;border-radius:8px;padding:8px;margin-bottom:6px}
 </style>
 </head>
 <body>
@@ -139,7 +139,7 @@ body{background:linear-gradient(180deg,#f5e6f7,#ede0f0);color:#333;min-height:10
     <div class="prize">💰 <span id="winner-prize">0</span> ብር</div>
     <div class="pattern-box">🏆 <b>ያሸነፈበት መስመር:</b> <span id="winner-pattern">-</span></div>
     <div class="marked-list">📌 <b>የዘጋባቸው ቁጥሮች:</b><br><span id="winner-line-nums">-</span></div>
-    <div class="marked-list">🎯 <b>በካርድ ላይ ሁሉም የተዘጉ:</b><br><span id="winner-all-marked">-</span></div>
+    <div class="marked-list">🎯 <b>በካርድ ላይ የተዘጉ ሁሉም:</b><br><span id="winner-all-marked">-</span></div>
     <div class="blessing">💚 ስለ ተሳትፎህ/ሽ ከልብ እናመሰግናለን!</div>
   </div>
 
@@ -148,13 +148,7 @@ body{background:linear-gradient(180deg,#f5e6f7,#ede0f0);color:#333;min-height:10
       <div class="label">🎯 የተጠራ</div>
       <div class="value" id="called-num-display">-</div>
     </div>
-    <div class="mycard-box">
-      <div class="title">🎲 የእኔ ካርዴ <span id="card-num-label"></span></div>
-      <div class="bingo-header">
-        <div class="b-red">B</div><div class="b-green">I</div><div class="b-yellow">N</div><div class="b-blue">G</div><div class="b-purple">O</div>
-      </div>
-      <div class="mini-card-grid" id="my-mini-card"></div>
-    </div>
+    <div id="my-mini-cards-container"></div>
   </div>
 
   <div class="board-card">
@@ -176,10 +170,6 @@ body{background:linear-gradient(180deg,#f5e6f7,#ede0f0);color:#333;min-height:10
       </div>
     </div>
     <div id="card-section" class="hidden">
-      <div class="board-card">
-        <div class="board-title">🎲 የእኔ ካርዶች (<span id="card-count">0</span>)</div>
-        <div id="my-full-cards"></div>
-      </div>
       <button class="btn btn-bingo" id="bingo-btn">🎉 ቢንጎ አለኝ!</button>
     </div>
   </div>
@@ -210,6 +200,15 @@ body{background:linear-gradient(180deg,#f5e6f7,#ede0f0);color:#333;min-height:10
         <button class="admin-btn" onclick="admReset()">🔄 አስጀምር</button>
       </div>
     </div>
+
+    <div class="admin-section">
+      <div class="admin-section-title">💳 የክፍያ ማጽደቂያ (Live)</div>
+      <div id="pending-payments-list" style="font-size:11px;max-height:250px;overflow-y:auto">
+        <p style="text-align:center;color:#95a5a6">🔄 በመጫን ላይ...</p>
+      </div>
+      <button class="admin-btn" onclick="loadPendingPayments()" style="background:linear-gradient(135deg,#e67e22,#d35400);margin-top:6px">🔄 ዝርዝር አድስ</button>
+    </div>
+
     <div class="admin-section">
       <div class="admin-section-title">👥 ተጫዋቾች</div>
       <div class="admin-grid">
@@ -256,7 +255,6 @@ const USER_ID = tg.initDataUnsafe?.user?.id || 0;
 const USER_NAME = tg.initDataUnsafe?.user?.first_name || 'ተጫዋች';
 let IS_ADMIN = false, ROOM_ID = 1, MY_CARD_NUM = null, HAS_SELECTED = false;
 let LAST_CALLED = null, WINNER_SHOWN = false, MY_BALANCE = 0, PRICE_INT = 50, PAY_ACCOUNT = '';
-let MY_CARDS_COUNT = 0;
 
 async function api(path, method='GET', body=null) {
   const o = { method, headers: {'Content-Type':'application/json'} };
@@ -342,29 +340,6 @@ function renderMasterBoard(called) {
     b.appendChild(c);
   }
 }
-function renderMiniCard(card) {
-  const el = document.getElementById('my-mini-card'); el.innerHTML='';
-  card.forEach(row => row.forEach(cell => {
-    const d = document.createElement('div'); d.className='mini-card-cell';
-    const ss = String(cell);
-    if (ss==='⭐') { d.classList.add('free'); d.innerText='⭐'; }
-    else if (ss.startsWith('✅')) { d.classList.add('called'); d.innerText=ss.replace('✅',''); }
-    else d.innerText=ss;
-    el.appendChild(d);
-  }));
-}
-function renderFullCard(card) {
-  const g = document.createElement('div'); g.className='full-card-grid';
-  card.forEach(row => row.forEach(cell => {
-    const d = document.createElement('div'); d.className='full-card-cell';
-    const ss = String(cell);
-    if (ss==='⭐') { d.classList.add('free'); d.innerText='⭐'; }
-    else if (ss.startsWith('✅')) { d.classList.add('called'); d.innerText=ss.replace('✅',''); }
-    else d.innerText=ss;
-    g.appendChild(d);
-  }));
-  return g;
-}
 function renderCardSelector(taken, total) {
   const sel = document.getElementById('card-selector'); sel.innerHTML='';
   const limit = Math.min(total||200, 200);
@@ -395,8 +370,6 @@ async function selectCard(num) {
   tg.showAlert(`🌟 ካርድ #${num} ተመርጧል!\n💰 ተቀነሰ: ${PRICE_INT} ብር\n💵 ቀሪ: ${MY_BALANCE} ብር\n\n🙏 እናመሰግናለን!`);
   document.getElementById('join-section').classList.add('hidden');
   document.getElementById('card-section').classList.remove('hidden');
-  document.getElementById('card-num-label').innerText = `#${num}`;
-  // ካርዱን ወዲያውኑ አሳይ
   await updateMyCards();
 }
 function showWinnerBanner(d) {
@@ -417,7 +390,10 @@ async function loadUserInfo() {
   IS_ADMIN = i.is_admin; MY_BALANCE = i.balance; PRICE_INT = i.price_int; PAY_ACCOUNT = i.account;
   document.getElementById('balance-display').innerText = MY_BALANCE + ' ብር';
   document.getElementById('welcome-bar').innerHTML = `🌟 🙏 እንኳን በደህና መጡ ${i.name}! 💚`;
-  if (IS_ADMIN) document.getElementById('admin-panel').classList.remove('hidden');
+  if (IS_ADMIN) {
+    document.getElementById('admin-panel').classList.remove('hidden');
+    loadPendingPayments();
+  }
 }
 async function loadRoom() {
   const p = new URLSearchParams(window.location.search);
@@ -464,7 +440,7 @@ async function loadRoom() {
   if (d.winners && d.winners.length > 0 && d.winner_name) {
     showWinnerBanner({
       winner: d.winner_name, winner_card: d.winner_card, prize: d.winner_prize,
-      pattern: d.winner_pattern, marked: d.winner_marked, line_nums: d.winner_line_nums, called_count: d.called_count
+      pattern: d.winner_pattern, marked: d.winner_marked, line_nums: d.winner_line_nums
     });
   }
   return d;
@@ -473,21 +449,32 @@ async function updateMyCards() {
   const r = await api('/api/mycard', 'POST', { user_id: USER_ID, room_id: ROOM_ID });
   if (r.cards && r.cards.length > 0) {
     HAS_SELECTED = true;
-    MY_CARDS_COUNT = r.cards.length;
-    document.getElementById('card-count').innerText = r.cards.length;
-    
-    // 🎯 የመጀመሪያውን ካርድ ሁልጊዜ በ mini አሳይ
-    if (r.cards[0]) renderMiniCard(r.cards[0]);
-    document.getElementById('card-num-label').innerText = `#${r.card_nums.join(', #')}`;
-    
-    // 🎯 ሁሉንም ካርዶች በ full section አሳይ
-    const el = document.getElementById('my-full-cards'); el.innerHTML = '';
+    const container = document.getElementById('my-mini-cards-container');
+    container.innerHTML = '';
     r.cards.forEach((c, idx) => {
-      const t = document.createElement('div');
-      t.style.cssText = 'text-align:center;font-size:12px;font-weight:700;color:#8e44ad;margin:6px 0;';
-      t.innerText = `🎫 ካርድ #${r.card_nums[idx]}`;
-      el.appendChild(t);
-      el.appendChild(renderFullCard(c));
+      const box = document.createElement('div');
+      box.className = 'mycard-box';
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.innerText = `🎲 ካርድ #${r.card_nums[idx]}`;
+      box.appendChild(title);
+      const header = document.createElement('div');
+      header.className = 'bingo-header';
+      header.innerHTML = '<div class="b-red">B</div><div class="b-green">I</div><div class="b-yellow">N</div><div class="b-blue">G</div><div class="b-purple">O</div>';
+      box.appendChild(header);
+      const grid = document.createElement('div');
+      grid.className = 'mini-card-grid';
+      c.forEach(row => row.forEach(cell => {
+        const d = document.createElement('div');
+        d.className = 'mini-card-cell';
+        const ss = String(cell);
+        if (ss === '⭐') { d.classList.add('free'); d.innerText = '⭐'; }
+        else if (ss.startsWith('✅')) { d.classList.add('called'); d.innerText = ss.replace('✅', ''); }
+        else d.innerText = ss;
+        grid.appendChild(d);
+      }));
+      box.appendChild(grid);
+      container.appendChild(box);
     });
     document.getElementById('card-section').classList.remove('hidden');
   }
@@ -527,6 +514,36 @@ async function loadHistory() {
 }
 
 // ADMIN
+async function loadPendingPayments() {
+  const r = await api('/api/admin/pending_payments', 'POST', { user_id: USER_ID });
+  const el = document.getElementById('pending-payments-list');
+  if (!r.pending || r.pending.length === 0) {
+    el.innerHTML = '<p style="text-align:center;color:#95a5a6;padding:10px">🙏 የሚጠበቅ ክፍያ የለም</p>';
+    return;
+  }
+  let h = '';
+  r.pending.forEach(p => {
+    h += `<div class="pending-pay">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span>👤 <b>${p.name}</b></span>
+        <span style="color:#f39c12">💰 ${p.price} ብር</span>
+      </div>
+      <div style="font-size:10px;color:#95a5a6;margin-bottom:6px">🆔 ${p.user_id}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+        <button onclick="approvePayment('${p.payment_id}','approve')" style="background:#27ae60;color:#fff;border:none;padding:6px;border-radius:6px;font-size:11px;font-weight:bold;cursor:pointer">✅ አጽድቅ</button>
+        <button onclick="approvePayment('${p.payment_id}','reject')" style="background:#e74c3c;color:#fff;border:none;padding:6px;border-radius:6px;font-size:11px;font-weight:bold;cursor:pointer">❌ ውድቅ</button>
+      </div>
+    </div>`;
+  });
+  el.innerHTML = h;
+}
+async function approvePayment(pid, act) {
+  const r = await api('/api/admin/approve_payment', 'POST', { user_id: USER_ID, payment_id: pid, action: act });
+  if (r.ok) {
+    showToast(act === 'approve' ? `✅ +${r.balance} ብር` : '❌ ውድቅ');
+    loadPendingPayments();
+  } else showToast('🙏 ' + (r.msg || 'ስህተት'));
+}
 async function admCreateRoom() {
   prompt2('🙏 Chat ID', [{id:'cid', type:'text', placeholder:'-1001234567890'}], async v => {
     const cid = parseInt(v.cid);
@@ -535,7 +552,7 @@ async function admCreateRoom() {
     if (r.ok) { showToast(`✅ ክፍል ${r.room_id}!`, 4000); setTimeout(()=>location.reload(), 1500); }
   });
 }
-async function admStartGame() { const r = await api('/api/admin/start_game','POST',{user_id:USER_ID,room_id:ROOM_ID}); showToast(r.ok?'▶️ ተጀምሯል':'🙏 '+(r.msg||'')); }
+async function admStartGame() { const r = await api('/api/admin/start_game','POST',{user_id:USER_ID,room_id:ROOM_ID}); showToast(r.ok?'▶️':'🙏 '+(r.msg||'')); }
 async function admTogglePause() { const r = await api('/api/admin/toggle_pause','POST',{user_id:USER_ID,room_id:ROOM_ID}); showToast(r.paused?'⏸️':'▶️'); }
 async function admCallNumber() {
   prompt2('🎯 ቁጥር',[{id:'n',type:'number',placeholder:'1-90'}],async v=>{
@@ -555,18 +572,18 @@ async function admAddBalance() { prompt2('💰 ባላንስ ጨምር',[{id:'uid
 async function admSetBalance() { prompt2('💵 ባላንስ ቀይር',[{id:'uid',type:'number',placeholder:'User ID'},{id:'amt',type:'number',placeholder:'አዲስ'}],async v=>{ const r = await api('/api/admin/set_balance','POST',{user_id:USER_ID,target_id:parseInt(v.uid),amount:parseInt(v.amt)}); if (r.ok) showToast(`✅ ${r.balance} ብር`); }); }
 async function admBan() { prompt2('🚫 አግድ',[{id:'uid',type:'number'}],async v=>{ await api('/api/admin/ban','POST',{user_id:USER_ID,target_id:parseInt(v.uid)}); showToast('🚫'); }); }
 async function admUnban() { prompt2('🔓 አንሳ',[{id:'uid',type:'number'}],async v=>{ await api('/api/admin/unban','POST',{user_id:USER_ID,target_id:parseInt(v.uid)}); showToast('🔓'); }); }
-async function admSendDM() { prompt2('📩 DM',[{id:'uid',type:'number',placeholder:'User ID'},{id:'m',type:'textarea',placeholder:'መልእክት'}],async v=>{ const r = await api('/api/admin/send_dm','POST',{user_id:USER_ID,target_id:parseInt(v.uid),message:v.m}); showToast(r.ok?'✅':'🙏'); }); }
-async function admRemoveCard() { prompt2('❌ ካርድ',[{id:'cn',type:'number',placeholder:'ካርድ ቁጥር'}],async v=>{ await api('/api/admin/remove_card','POST',{user_id:USER_ID,room_id:ROOM_ID,card_num:parseInt(v.cn)}); showToast('✅'); loadRoom(); }); }
-async function admForceWin() { prompt2('🏆 አሸናፊ',[{id:'uid',type:'number',placeholder:'User ID'}],async v=>{ const r = await api('/api/admin/force_win','POST',{user_id:USER_ID,room_id:ROOM_ID,target_user_id:parseInt(v.uid)}); if (r.ok) { showToast('🏆'); WINNER_SHOWN=false; loadRoom(); } }); }
+async function admSendDM() { prompt2('📩 DM',[{id:'uid',type:'number'},{id:'m',type:'textarea'}],async v=>{ const r = await api('/api/admin/send_dm','POST',{user_id:USER_ID,target_id:parseInt(v.uid),message:v.m}); showToast(r.ok?'✅':'🙏'); }); }
+async function admRemoveCard() { prompt2('❌ ካርድ',[{id:'cn',type:'number'}],async v=>{ await api('/api/admin/remove_card','POST',{user_id:USER_ID,room_id:ROOM_ID,card_num:parseInt(v.cn)}); showToast('✅'); loadRoom(); }); }
+async function admForceWin() { prompt2('🏆 አሸናፊ',[{id:'uid',type:'number'}],async v=>{ const r = await api('/api/admin/force_win','POST',{user_id:USER_ID,room_id:ROOM_ID,target_user_id:parseInt(v.uid)}); if (r.ok) { showToast('🏆'); WINNER_SHOWN=false; loadRoom(); } }); }
 async function admSetPrice() { prompt2('💵 ዋጋ',[{id:'v',type:'text',value:'50 ብር'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'price',value:x.v}); showToast('✅'); loadUserInfo(); }); }
 async function admSetAccount() { prompt2('🏦 አካውንት',[{id:'v',type:'text',value:'CBE 1000123456789'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'account',value:x.v}); showToast('✅'); loadUserInfo(); }); }
 async function admSetInterval() { prompt2('⏱️ ፍጥነት',[{id:'v',type:'select',value:'5',options:[{v:'3',t:'3s'},{v:'5',t:'5s'},{v:'10',t:'10s'},{v:'15',t:'15s'}]}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'call_interval',value:x.v}); showToast('✅'); }); }
-async function admSetCommission() { prompt2('💹 ኮሚሽን %',[{id:'v',type:'number',placeholder:'0-50'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'commission',value:x.v}); showToast('✅'); }); }
-async function admSetDailyBonus() { prompt2('🎁 ስጦታ',[{id:'v',type:'number',placeholder:'ብር'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'daily_bonus',value:x.v}); showToast('✅'); }); }
+async function admSetCommission() { prompt2('💹 ኮሚሽን %',[{id:'v',type:'number'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'commission',value:x.v}); showToast('✅'); }); }
+async function admSetDailyBonus() { prompt2('🎁 ስጦታ',[{id:'v',type:'number'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'daily_bonus',value:x.v}); showToast('✅'); }); }
 async function admSetMaxCards() { prompt2('🎫 ካርድ ገደብ',[{id:'v',type:'select',value:'2',options:[{v:'1',t:'1'},{v:'2',t:'2'},{v:'3',t:'3'},{v:'5',t:'5'}]}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'max_cards_per_player',value:x.v}); showToast('✅'); }); }
 async function admSetPattern() { prompt2('🏆 ዓይነት',[{id:'v',type:'select',value:'single',options:[{v:'single',t:'አንድ መስመር'},{v:'fullhouse',t:'ሙሉ ካርድ'},{v:'corners',t:'አራት ማዕዘን'}]}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'win_pattern',value:x.v}); showToast('✅'); }); }
-async function admSetJackpotPct() { prompt2('🎰 ጃክፖት %',[{id:'v',type:'number',placeholder:'0-30'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'jackpot_percent',value:x.v}); showToast('✅'); }); }
-async function admSetMinWithdraw() { prompt2('💸 ማውጣት',[{id:'v',type:'number',placeholder:'ብር'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'min_withdraw',value:x.v}); showToast('✅'); }); }
+async function admSetJackpotPct() { prompt2('🎰 ጃክፖት %',[{id:'v',type:'number'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'jackpot_percent',value:x.v}); showToast('✅'); }); }
+async function admSetMinWithdraw() { prompt2('💸 ማውጣት',[{id:'v',type:'number'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'min_withdraw',value:x.v}); showToast('✅'); }); }
 async function admSetName() { prompt2('✏️ ስም',[{id:'v',type:'text',value:'ዘና ቢንጎ ከድጎ'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'game_name',value:x.v}); showToast('✅'); loadRoom(); }); }
 async function admStats() {
   const r = await api('/api/admin/stats','POST',{user_id:USER_ID});
@@ -577,7 +594,7 @@ async function admStats() {
     <p>🚫 የተከለከሉ: <b>${r.banned}</b></p>
     <p>🎰 ጃክፖት: <b>${r.jackpot} ብር</b></p>
     <hr style="margin:8px 0"><p style="font-weight:700">📜 አሸናፊዎች:</p>`;
-  (r.history||[]).forEach(x => h += `<div style="padding:5px 0;font-size:11px;border-bottom:1px solid #eee">🏆 ${x.winner} (#${x.card}) — ${x.prize} ብር<br><small>🏆 ${x.pattern||'-'}</small></div>`);
+  (r.history||[]).forEach(x => h += `<div style="padding:5px 0;font-size:11px;border-bottom:1px solid #eee">🏆 ${x.winner} (#${x.card}) — ${x.prize} ብር<br><small>${x.pattern||'-'}</small></div>`);
   h += '</div>';
   showModal('📊 ስታቲስቲክስ', h, [{text:'🙏 ዝጋ', class:'btn-ok', onclick:()=>{}}]);
 }
@@ -601,6 +618,7 @@ async function approveW(tid, act) { await api('/api/admin/approve_withdraw','POS
 async function poll() {
   await loadRoom();
   await updateMyCards();
+  if (IS_ADMIN) await loadPendingPayments();
 }
 loadUserInfo().then(() => loadRoom());
 setInterval(poll, 3000);
