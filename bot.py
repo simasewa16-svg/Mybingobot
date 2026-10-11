@@ -8,7 +8,7 @@ from threading import Thread
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ⚠️ እዚህ ጋር የአንተን የቴሌግራም ID ተክለው (ከ @userinfobot ያገኘኸውን)
-ADMIN_ID = 123456789 
+ADMIN_ID = 5671366303 
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(BOT_TOKEN)
