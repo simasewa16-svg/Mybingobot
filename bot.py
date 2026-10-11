@@ -133,7 +133,20 @@ def show_admin_panel(message):
         return
     chat_id = message.chat.id
     game = games.get(chat_id)
-    bot.send_message(chat_id, "🎛️ <b>የአስተዳዳሪ ፓነል</b>\n\nእባክህ የምትፈልገውን ተግባር ምረጥ፦", reply_markup=get_main_panel(game), parse_mode='HTML')
+    
+    # 🎯 መልእክቱን መላክ እና ID መያዝ
+    msg = bot.send_message(
+        chat_id, 
+        "🎛️ <b>የአስተዳዳሪ ፓነል</b>\n\nእባክህ የምትፈልገውን ተግባር ምረጥ፦", 
+        reply_markup=get_main_panel(game), 
+        parse_mode='HTML'
+    )
+    
+    # 📌 መልእክቱን በራስ-ሰር ማሰካት (Pin)
+    try:
+        bot.pin_chat_message(chat_id, msg.message_id)
+    except Exception as e:
+        print(f"Pin error: {e}") # የቦቱ የፒን ፈቃድ ከሌለው ስህተት ይሰጣል
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('admin_'))
 def handle_admin_actions(call):
@@ -581,17 +594,66 @@ def handle_payment_screenshot(message):
         bot.reply_to(message, "⛔ ይህ ደረሰኝ አስቀድሞ ተልኳል!")
         return
     game.used_receipts.add(file_id)
+    
+    # 🎯 የማጽደቅ እና የመውደቅ ቁልፎችን መስራት
+    markup = InlineKeyboardMarkup()
+    markup.row(
+        InlineKeyboardButton("✅ አጽድቅ", callback_data=f"papprove_{user_id}_{chat_id}"),
+        InlineKeyboardButton("❌ ውድቅ አድርግ", callback_data=f"preject_{user_id}_{chat_id}")
+    )
+    
     admin_text = (
         f"🔔 <b>አዲስ የክፍያ ማረጋገጫ!</b>\n\n"
         f"👤 ተጫዋች: {message.from_user.first_name}\n"
         f"🆔 ID: {user_id}\n"
-        f"💬 Chat ID: {chat_id}\n\n"
-        f"👉 ለማጽደቅ ይህንን መልእክት Reply አድርገህ /approve በል።\n"
-        f"👉 ሁሉንም በአንድ ጊዜ ለማጽደቅ /panel ተጠቀም።"
+        f"💬 Chat ID: {chat_id}\n"
+        f"💰 ዋጋ: {payment_settings['price']}\n"
+        f"🏦 አካውንት: {payment_settings['account']}\n\n"
+        f"👇 ለማጽደቅ ወይም ለመውደቅ ከታች ያሉትን ቁልፎች ተጠቀም:"
     )
-    bot.send_message(ADMIN_ID, admin_text, parse_mode='HTML')
+    bot.send_message(ADMIN_ID, admin_text, reply_markup=markup, parse_mode='HTML')
     bot.forward_message(ADMIN_ID, chat_id, message.message_id)
-    bot.reply_to(message, "✅ ስክሪንሾትዎ ለአስተዳዳሪው ተልኳል።")
+    bot.reply_to(message, "✅ ስክሪንሾትዎ ለአስተዳዳሪው ተልኳል። እባክህ ማረጋገጫ ጠብቅ።")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('papprove_') or call.data.startswith('preject_'))
+def handle_payment_approval_buttons(call):
+    if call.from_user.id != ADMIN_ID:
+        bot.answer_callback_query(call.id, "⛔ ይህ ለአስተዳዳሪ ብቻ ነው!")
+        return
+    
+    parts = call.data.split('_')
+    action = parts[0]
+    user_id = int(parts[1])
+    chat_id = int(parts[2])
+    
+    if chat_id not in games:
+        bot.answer_callback_query(call.id, "⚠️ ንቁ ጨዋታ አልተገኘም።")
+        return
+        
+    game = games[chat_id]
+    
+    if action == 'papprove':
+        if user_id in game.approved_players:
+            bot.answer_callback_query(call.id, "አስቀድሞ ተጸድቋል!")
+            return
+        game.approved_players.add(user_id)
+        game.pending_players.discard(user_id)
+        bot.answer_callback_query(call.id, "✅ ተጫዋቹ ጸድቋል!")
+        try:
+            # ቁልፎቹን ማጥፋት (ድጋሚ እንዳይጫን)
+            bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
+        except: pass
+        bot.send_message(chat_id, f"✅ ክፍያዎ ተረጋግጧል! አሁን ጨዋታውን መጫወት ይችላሉ።")
+        
+    elif action == 'preject':
+        game.pending_players.discard(user_id)
+        game.players.pop(user_id, None) 
+        game.player_card_numbers.pop(user_id, None)
+        bot.answer_callback_query(call.id, "❌ ተጫዋቹ ውድቅ ተደርጓል!")
+        try:
+            bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
+        except: pass
+        bot.send_message(chat_id, f"❌ ክፍያዎ ውድቅ ተደርጓል። እባክህ በትክክል ከፍለህ እንደገና ሞክር።")
 
 @bot.message_handler(commands=['mycard'])
 def show_my_card(message):
@@ -737,12 +799,7 @@ def broadcast(message):
     try:
         msg = message.text.split(' ', 1)[1]
         count = 0
-        # ከታሪክ የተሰበሰቡ ተጠቃሚዎች
         users = set()
-        for g in game_history:
-            # ማንኛውም የተሳተፈ ተጠቃሚ
-            pass
-        # በአሁኑ ጨዋታ ያሉ
         for chat_id, game in games.items():
             for uid in list(game.approved_players) + list(game.pending_players):
                 users.add(uid)
