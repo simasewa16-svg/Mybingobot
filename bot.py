@@ -29,16 +29,19 @@ def keep_alive():
 games = {}
 payment_settings = {
     'price': '50 ብር',
-    'account': 'CBE 1000123456789'
+    'account': 'CBE 1000123456789',
+    'call_interval': 5,
+    'win_pattern': 'single'  # single, fullhouse, corners
 }
+banned_players = set()  # 🛡️ የተከለከሉ ተጫዋቾች
+game_history = []  # 📜 የጨዋታ ታሪክ
 
-# ================= 🎛️ የአስተዳዳሪ ፓነል (Admin Panel) =================
+# ================= 🎛️ የአስተዳዳሪ ፓነል =================
 
-def get_admin_panel(game=None):
+def get_main_panel(game=None):
     markup = InlineKeyboardMarkup()
     
     if game and game.is_active:
-        # ጨዋታ ንቁ ከሆነ
         if game.join_open:
             markup.row(
                 InlineKeyboardButton("▶️ ቁጥር ጥራ", callback_data="admin_begin_calling"),
@@ -52,15 +55,76 @@ def get_admin_panel(game=None):
             InlineKeyboardButton("✅ ሁሉንም አጽድቅ", callback_data="admin_approve_all"),
             InlineKeyboardButton("📊 ዳሽቦርድ", callback_data="admin_dashboard")
         )
+        markup.row(
+            InlineKeyboardButton("👥 ተጫዋቾች", callback_data="admin_players_menu"),
+            InlineKeyboardButton("⚙️ ቅንብሮች", callback_data="admin_settings_menu")
+        )
     else:
-        # ጨዋታ ካልተጀመረ
+        markup.row(InlineKeyboardButton("🎮 ጨዋታ ጀምር", callback_data="admin_start_game"))
         markup.row(
-            InlineKeyboardButton("🎮 ጨዋታ ጀምር", callback_data="admin_start_game")
+            InlineKeyboardButton("⚙️ ቅንብሮች", callback_data="admin_settings_menu"),
+            InlineKeyboardButton("📊 ስታቲስቲክስ", callback_data="admin_stats_menu")
         )
         markup.row(
-            InlineKeyboardButton("💰 ዋጋ ቀይር", callback_data="admin_setprice"),
-            InlineKeyboardButton("🏦 አካውንት ቀይር", callback_data="admin_setaccount")
+            InlineKeyboardButton("🚫 የተከለከሉ", callback_data="admin_banned_list"),
+            InlineKeyboardButton("📢 ማስታወቂያ", callback_data="admin_broadcast_menu")
         )
+    return markup
+
+def get_players_menu():
+    markup = InlineKeyboardMarkup()
+    markup.row(
+        InlineKeyboardButton("📋 ዝርዝር አሳይ", callback_data="admin_list_players"),
+        InlineKeyboardButton("👢 ተጫዋች አስወግድ", callback_data="admin_kick_prompt")
+    )
+    markup.row(
+        InlineKeyboardButton("🚫 ተጫዋች አግድ", callback_data="admin_ban_prompt"),
+        InlineKeyboardButton("🔙 ወደ ኋላ", callback_data="admin_back_main")
+    )
+    return markup
+
+def get_settings_menu():
+    markup = InlineKeyboardMarkup()
+    markup.row(
+        InlineKeyboardButton("💰 ዋጋ ቀይር", callback_data="admin_setprice_prompt"),
+        InlineKeyboardButton("🏦 አካውንት ቀይር", callback_data="admin_setaccount_prompt")
+    )
+    markup.row(
+        InlineKeyboardButton("⏱️ የጥሪ ፍጥነት", callback_data="admin_interval_prompt"),
+        InlineKeyboardButton("🏆 የማሸነፍ ዓይነት", callback_data="admin_pattern_menu")
+    )
+    markup.row(InlineKeyboardButton("🔙 ወደ ኋላ", callback_data="admin_back_main"))
+    return markup
+
+def get_pattern_menu():
+    markup = InlineKeyboardMarkup()
+    current = payment_settings.get('win_pattern', 'single')
+    markup.row(
+        InlineKeyboardButton(f"{'✅' if current=='single' else '⬜'} አንድ መስመር", callback_data="admin_pattern_single"),
+        InlineKeyboardButton(f"{'✅' if current=='fullhouse' else '⬜'} ሙሉ ካርድ", callback_data="admin_pattern_fullhouse")
+    )
+    markup.row(
+        InlineKeyboardButton(f"{'✅' if current=='corners' else '⬜'} አራት ማዕዘን", callback_data="admin_pattern_corners"),
+        InlineKeyboardButton("🔙 ወደ ኋላ", callback_data="admin_settings_menu")
+    )
+    return markup
+
+def get_stats_menu():
+    markup = InlineKeyboardMarkup()
+    markup.row(
+        InlineKeyboardButton("📜 የጨዋታ ታሪክ", callback_data="admin_game_history"),
+        InlineKeyboardButton("🏆 አሸናፊዎች", callback_data="admin_winners_list")
+    )
+    markup.row(InlineKeyboardButton("🔙 ወደ ኋላ", callback_data="admin_back_main"))
+    return markup
+
+def get_broadcast_menu():
+    markup = InlineKeyboardMarkup()
+    markup.row(
+        InlineKeyboardButton("📢 ሁሉንም አሳውቅ", callback_data="admin_broadcast_all"),
+        InlineKeyboardButton("✅ የጸደቁትን ብቻ", callback_data="admin_broadcast_approved")
+    )
+    markup.row(InlineKeyboardButton("🔙 ወደ ኋላ", callback_data="admin_back_main"))
     return markup
 
 @bot.message_handler(commands=['panel'])
@@ -69,7 +133,7 @@ def show_admin_panel(message):
         return
     chat_id = message.chat.id
     game = games.get(chat_id)
-    bot.send_message(chat_id, "🎛️ <b>የአስተዳዳሪ ፓነል</b>\n\nእባክህ የምትፈልገውን ተግባር ምረጥ፦", reply_markup=get_admin_panel(game), parse_mode='HTML')
+    bot.send_message(chat_id, "🎛️ <b>የአስተዳዳሪ ፓነል</b>\n\nእባክህ የምትፈልገውን ተግባር ምረጥ፦", reply_markup=get_main_panel(game), parse_mode='HTML')
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('admin_'))
 def handle_admin_actions(call):
@@ -81,14 +145,39 @@ def handle_admin_actions(call):
     action = call.data.replace('admin_', '')
     game = games.get(chat_id)
 
-    if action == "start_game":
+    # ===== ዋና ገጽ =====
+    if action == "back_main":
+        bot.edit_message_text("🎛️ <b>የአስተዳዳሪ ፓነል</b>\n\nእባክህ የምትፈልገውን ተግባር ምረጥ፦", chat_id, call.message.message_id, reply_markup=get_main_panel(game), parse_mode='HTML')
+        bot.answer_callback_query(call.id)
+
+    elif action == "players_menu":
+        bot.edit_message_text("👥 <b>የተጫዋቾች አስተዳደር</b>\n\nምን ማድረግ ትፈልጋለህ?", chat_id, call.message.message_id, reply_markup=get_players_menu(), parse_mode='HTML')
+        bot.answer_callback_query(call.id)
+
+    elif action == "settings_menu":
+        bot.edit_message_text("⚙️ <b>ቅንብሮች</b>\n\nምን መቀየር ትፈልጋለህ?", chat_id, call.message.message_id, reply_markup=get_settings_menu(), parse_mode='HTML')
+        bot.answer_callback_query(call.id)
+
+    elif action == "stats_menu":
+        bot.edit_message_text("📊 <b>ስታቲስቲክስ</b>\n\nምን ማየት ትፈልጋለህ?", chat_id, call.message.message_id, reply_markup=get_stats_menu(), parse_mode='HTML')
+        bot.answer_callback_query(call.id)
+
+    elif action == "broadcast_menu":
+        bot.edit_message_text("📢 <b>ማስታወቂያ</b>\n\nለማን መላክ ትፈልጋለህ?", chat_id, call.message.message_id, reply_markup=get_broadcast_menu(), parse_mode='HTML')
+        bot.answer_callback_query(call.id)
+
+    elif action == "pattern_menu":
+        bot.edit_message_text("🏆 <b>የማሸነፍ ዓይነት</b>\n\nአሁን ያለው: " + payment_settings.get('win_pattern', 'single'), chat_id, call.message.message_id, reply_markup=get_pattern_menu(), parse_mode='HTML')
+        bot.answer_callback_query(call.id)
+
+    # ===== የጨዋታ ተግባራት =====
+    elif action == "start_game":
         if game and game.is_active:
             bot.answer_callback_query(call.id, "⚠️ ጨዋታ አስቀድሞ ተጀምሯል!")
             return
         start_new_game(chat_id)
         bot.answer_callback_query(call.id, "🎮 ጨዋታ ተጀምሯል!")
-        # ፓነሉን ማደስ
-        bot.edit_message_reply_markup(chat_id, call.message.message_id, reply_markup=get_admin_panel(games.get(chat_id)))
+        bot.edit_message_reply_markup(chat_id, call.message.message_id, reply_markup=get_main_panel(games.get(chat_id)))
 
     elif action == "begin_calling":
         if not game or not game.is_active:
@@ -98,10 +187,10 @@ def handle_admin_actions(call):
             bot.answer_callback_query(call.id, "⚠️ እስካሁን የጸደቀ ተጫዋች የለም!")
             return
         game.join_open = False
-        bot.send_message(chat_id, "▶️ ጨዋታው ተጀምሯል! ቁጥሮች በየ5 ሰከንዱ ይጠራሉ...")
+        bot.send_message(chat_id, "▶️ ጨዋታው ተጀምሯል! ቁጥሮች በየ" + str(payment_settings['call_interval']) + " ሰከንዱ ይጠራሉ...")
         threading.Thread(target=auto_call_loop, args=(chat_id,), daemon=True).start()
         bot.answer_callback_query(call.id, "ቁጥሮች መጠራት ጀመሩ!")
-        bot.edit_message_reply_markup(chat_id, call.message.message_id, reply_markup=get_admin_panel(games.get(chat_id)))
+        bot.edit_message_reply_markup(chat_id, call.message.message_id, reply_markup=get_main_panel(games.get(chat_id)))
 
     elif action == "approve_all":
         if not game:
@@ -115,29 +204,24 @@ def handle_admin_actions(call):
             game.approved_players.add(uid)
             game.pending_players.discard(uid)
             try:
-                bot.send_message(chat_id, f"✅ ክፍያዎ ተረጋግጧል! አሁን ጨዋታውን መጫወት ይችላሉ።")
+                bot.send_message(uid, "✅ ክፍያዎ ተረጋግጧል! አሁን ጨዋታውን መጫወት ይችላሉ።")
             except: pass
         bot.answer_callback_query(call.id, f"✅ {pending_count} ተጫዋቾች ጸድቀዋል!")
-        bot.send_message(ADMIN_ID, f"✅ {pending_count} ተጫዋቾች በአንድ ጊዜ ጸድቀዋል።")
 
     elif action == "dashboard":
         if not game:
             bot.answer_callback_query(call.id, "⚠️ ምንም ጨዋታ የለም!")
             return
-        text = "📊 <b>የአስተዳዳሪ ዳሽቦርድ</b> 📊\n\n"
+        text = "📊 <b>ዳሽቦርድ</b> 📊\n\n"
         text += f"🎮 ሁኔታ: {'🟢 ንቁ' if game.is_active else '🔴 የቆመ'}\n"
         text += f"🚪 መቀላቀል: {'🔓 ክፍት' if game.join_open else '🔒 ተዘግቷል'}\n\n"
         text += f"👥 የጸደቁ: {len(game.approved_players)}\n"
         text += f"⏳ በመጠበቅ: {len(game.pending_players)}\n"
-        text += f"🎫 የተወሰዱ ካርዶች: {len(game.taken_cards)} / 100\n\n"
+        text += f"🎫 ካርዶች: {len(game.taken_cards)} / 100\n\n"
         text += f"📢 የተጠሩ: {len(game.called_numbers)}\n"
         text += f"📦 የቀሩ: {len(game.available_numbers)}\n"
         if game.called_numbers:
             text += f"📜 የመጨረሻ 5: {', '.join(game.called_numbers[-5:])}\n"
-        if game.approved_players:
-            text += "\n👤 <b>ተጫዋቾች (ካርድ):</b>\n"
-            for uid in game.approved_players:
-                text += f"• ID: {uid} | ካርድ: {game.player_card_numbers.get(uid, '?')}\n"
         bot.send_message(ADMIN_ID, text, parse_mode='HTML')
         bot.answer_callback_query(call.id, "ዳሽቦርድ በግል ተልኳል!")
 
@@ -146,17 +230,102 @@ def handle_admin_actions(call):
             game.is_active = False
             bot.send_message(chat_id, "🔴 ጨዋታው በአስተዳዳሪው ተቋርጧል።")
             bot.answer_callback_query(call.id, "ጨዋታው ቆሟል!")
-            bot.edit_message_reply_markup(chat_id, call.message.message_id, reply_markup=get_admin_panel(games.get(chat_id)))
+            bot.edit_message_reply_markup(chat_id, call.message.message_id, reply_markup=get_main_panel(games.get(chat_id)))
         else:
             bot.answer_callback_query(call.id, "ምንም ጨዋታ የለም!")
 
-    elif action == "setprice":
-        bot.answer_callback_query(call.id, "ዋጋ ለመቀየር /setprice 50 ብለህ ጻፍ")
-        bot.send_message(chat_id, "💰 ዋጋ ለመቀየር እባክህ እንዲህ ጻፍ: <code>/setprice 50 ብር</code>", parse_mode='HTML')
+    # ===== የተጫዋች አስተዳደር =====
+    elif action == "list_players":
+        if not game:
+            bot.answer_callback_query(call.id, "⚠️ ምንም ጨዋታ የለም!")
+            return
+        text = "👥 <b>የተጫዋቾች ዝርዝር</b>\n\n"
+        text += f"✅ የጸደቁ ({len(game.approved_players)}):\n"
+        for uid in game.approved_players:
+            card_num = game.player_card_numbers.get(uid, "?")
+            text += f"• ID: {uid} | ካርድ: {card_num}\n"
+        text += f"\n⏳ በመጠበቅ ({len(game.pending_players)}):\n"
+        for uid in game.pending_players:
+            card_num = game.player_card_numbers.get(uid, "?")
+            text += f"• ID: {uid} | ካርድ: {card_num}\n"
+        bot.send_message(ADMIN_ID, text, parse_mode='HTML')
+        bot.answer_callback_query(call.id, "ዝርዝር በግል ተልኳል!")
 
-    elif action == "setaccount":
-        bot.answer_callback_query(call.id, "አካውንት ለመቀየር /setaccount ... ብለህ ጻፍ")
-        bot.send_message(chat_id, "🏦 አካውንት ለመቀየር እባክህ እንዲህ ጻፍ: <code>/setaccount CBE 1000123456789</code>", parse_mode='HTML')
+    elif action == "kick_prompt":
+        bot.answer_callback_query(call.id, "መልእክት ላክ")
+        bot.send_message(chat_id, "👢 <b>ተጫዋች ለማስወገድ:</b> <code>/kick USER_ID</code> ብለህ ጻፍ\nለምሳሌ: <code>/kick 5671366303</code>", parse_mode='HTML')
+
+    elif action == "ban_prompt":
+        bot.answer_callback_query(call.id, "መልእክት ላክ")
+        bot.send_message(chat_id, "🚫 <b>ተጫዋች ለማገድ:</b> <code>/ban USER_ID</code> ብለህ ጻፍ\nለምሳሌ: <code>/ban 5671366303</code>", parse_mode='HTML')
+
+    elif action == "banned_list":
+        text = "🚫 <b>የተከለከሉ ተጫዋቾች</b>\n\n"
+        if banned_players:
+            for uid in banned_players:
+                text += f"• ID: {uid}\n"
+            text += "\n🔓 ለማንሳት: <code>/unban USER_ID</code>"
+        else:
+            text += "ምንም የተከለከለ ተጫዋች የለም።"
+        bot.send_message(ADMIN_ID, text, parse_mode='HTML')
+        bot.answer_callback_query(call.id, "በግል ተልኳል!")
+
+    # ===== ቅንብሮች =====
+    elif action == "setprice_prompt":
+        bot.answer_callback_query(call.id, "መልእክት ላክ")
+        bot.send_message(chat_id, "💰 <b>ዋጋ ለመቀየር:</b> <code>/setprice 100 ብር</code>", parse_mode='HTML')
+
+    elif action == "setaccount_prompt":
+        bot.answer_callback_query(call.id, "መልእክት ላክ")
+        bot.send_message(chat_id, "🏦 <b>አካውንት ለመቀየር:</b> <code>/setaccount CBE 1000123456789</code>", parse_mode='HTML')
+
+    elif action == "interval_prompt":
+        bot.answer_callback_query(call.id, "መልእክት ላክ")
+        bot.send_message(chat_id, "⏱️ <b>የጥሪ ፍጥነት ለመቀየር:</b> <code>/setinterval 5</code> (በሰከንድ)", parse_mode='HTML')
+
+    elif action.startswith("pattern_"):
+        pattern = action.replace("pattern_", "")
+        payment_settings['win_pattern'] = pattern
+        pattern_names = {'single': 'አንድ መስመር', 'fullhouse': 'ሙሉ ካርድ', 'corners': 'አራት ማዕዘን'}
+        bot.edit_message_text(f"🏆 የማሸነፍ ዓይነት ወደ <b>{pattern_names[pattern]}</b> ተቀይሯል!", chat_id, call.message.message_id, reply_markup=get_pattern_menu(), parse_mode='HTML')
+        bot.answer_callback_query(call.id, "ተቀይሯል!")
+
+    # ===== ስታቲስቲክስ =====
+    elif action == "game_history":
+        text = "📜 <b>የጨዋታ ታሪክ</b>\n\n"
+        if game_history:
+            for i, g in enumerate(game_history[-10:], 1):
+                text += f"{i}. 🎮 {g.get('chat_title', 'Unknown')}\n"
+                text += f"   🏆 አሸናፊ: {g.get('winner_name', 'Unknown')} (ካርድ: {g.get('card_num', '?')})\n"
+                text += f"   📅 {g.get('date', '?')}\n\n"
+        else:
+            text += "እስካሁን የተጫወተ ጨዋታ የለም።"
+        bot.send_message(ADMIN_ID, text, parse_mode='HTML')
+        bot.answer_callback_query(call.id, "በግል ተልኳል!")
+
+    elif action == "winners_list":
+        text = "🏆 <b>የአሸናፊዎች ስታቲስቲክስ</b>\n\n"
+        winner_count = {}
+        for g in game_history:
+            name = g.get('winner_name', 'Unknown')
+            winner_count[name] = winner_count.get(name, 0) + 1
+        if winner_count:
+            sorted_winners = sorted(winner_count.items(), key=lambda x: x[1], reverse=True)
+            for i, (name, count) in enumerate(sorted_winners[:10], 1):
+                text += f"{i}. 🏆 {name} - {count} ጊዜ\n"
+        else:
+            text += "እስካሁን አሸናፊ የለም።"
+        bot.send_message(ADMIN_ID, text, parse_mode='HTML')
+        bot.answer_callback_query(call.id, "በግል ተልኳል!")
+
+    # ===== ማስታወቂያ =====
+    elif action == "broadcast_all":
+        bot.answer_callback_query(call.id, "መልእክት ላክ")
+        bot.send_message(chat_id, "📢 <b>ማስታወቂያ ለመላክ:</b> <code>/broadcast የመልእክት ጽሑፍ</code>", parse_mode='HTML')
+
+    elif action == "broadcast_approved":
+        bot.answer_callback_query(call.id, "መልእክት ላክ")
+        bot.send_message(chat_id, "📢 <b>ለተጸደቁት ብቻ ለመላክ:</b> <code>/broadcastvip የመልእክት ጽሑፍ</code>", parse_mode='HTML')
 
 # ================= 🎮 የጨዋታ ሎጂክ =================
 
@@ -254,19 +423,38 @@ class BingoGame:
     def check_bingo(self, card, called):
         called_set = set(called)
         letters = ["B", "I", "N", "G", "O"]
+        pattern = payment_settings.get('win_pattern', 'single')
+        
+        # አግድም
         for row in card:
             if all(str(num) == "⭐" or f"{letters[i]}-{num}" in called_set for i, num in enumerate(row)): return True
+        # ቀጥ ያለ
         for c in range(5):
             if all(str(card[r][c]) == "⭐" or f"{letters[c]}-{card[r][c]}" in called_set for r in range(5)): return True
+        # ሰያፍ
         if all(str(card[i][i]) == "⭐" or f"{letters[i]}-{card[i][i]}" in called_set for i in range(5)): return True
         if all(str(card[i][4-i]) == "⭐" or f"{letters[4-i]}-{card[i][4-i]}" in called_set for i in range(5)): return True
+        
+        # ሙሉ ካርድ (Full House)
+        if pattern == 'fullhouse':
+            if all(str(card[r][c]) == "⭐" or f"{letters[c]}-{card[r][c]}" in called_set for r in range(5) for c in range(5)):
+                return True
+        
+        # አራት ማዕዘን (Four Corners)
+        if pattern == 'corners':
+            corners = [card[0][0], card[0][4], card[4][0], card[4][4]]
+            if all(f"{letters[0]}-{corners[0]}" in called_set, f"{letters[4]}-{corners[1]}" in called_set, 
+                   f"{letters[0]}-{corners[2]}" in called_set, f"{letters[4]}-{corners[3]}" in called_set):
+                return True
+        
         return False
 
 def auto_call_loop(chat_id):
     game = games.get(chat_id)
     if not game: return
+    interval = payment_settings.get('call_interval', 5)
     while game.is_active:
-        time.sleep(5) 
+        time.sleep(interval) 
         if not game.is_active: break
         if not game.available_numbers:
             bot.send_message(chat_id, "⚠️ ሁሉም ቁጥሮች ተጠርተዋል! ጨዋታው አልቋል።")
@@ -293,6 +481,20 @@ def auto_call_loop(chat_id):
                     winner_name = f"ID: {uid}"
                 bot.send_message(chat_id, f"🎉🎉 BINGO! {winner_name} አሸንፏል! (የካርድ ቁጥር: {card_num})")
                 bot.send_message(ADMIN_ID, f"🏆 አሸናፊ! {winner_name} (ID: {uid}) | ካርድ ቁጥር: {card_num}")
+                
+                # 📜 ወደ ታሪክ መመዝገብ
+                try:
+                    chat_info = bot.get_chat(chat_id)
+                    chat_title = chat_info.title if chat_info.title else "Private"
+                except:
+                    chat_title = "Unknown"
+                game_history.append({
+                    'chat_title': chat_title,
+                    'winner_name': winner_name,
+                    'card_num': card_num,
+                    'date': time.strftime("%Y-%m-%d %H:%M")
+                })
+            
             if len(new_winners) > 1:
                 bot.send_message(chat_id, "⚠️ በርካታ አሸናፊዎች ተገኝተዋል! ሽልማቱ በእኩል ይካፈላል።")
             game.is_active = False
@@ -319,6 +521,11 @@ def handle_taken(call):
 def handle_card_selection(call):
     chat_id = call.message.chat.id
     user_id = call.from_user.id
+    
+    if user_id in banned_players:
+        bot.answer_callback_query(call.id, "🚫 አንተ ተከልክለሃል!")
+        return
+    
     if chat_id not in games or not games[chat_id].is_active or not games[chat_id].join_open:
         bot.answer_callback_query(call.id, "ይቅርታ፣ የመምረጫ ጊዜው አልፏል!")
         return
@@ -354,6 +561,11 @@ def handle_card_selection(call):
 def handle_payment_screenshot(message):
     chat_id = message.chat.id
     user_id = message.from_user.id
+    
+    if user_id in banned_players:
+        bot.reply_to(message, "🚫 አንተ ተከልክለሃል!")
+        return
+    
     if chat_id not in games or not games[chat_id].is_active:
         bot.reply_to(message, "ምንም ንቁ ጨዋታ የለም።")
         return
@@ -375,7 +587,7 @@ def handle_payment_screenshot(message):
         f"🆔 ID: {user_id}\n"
         f"💬 Chat ID: {chat_id}\n\n"
         f"👉 ለማጽደቅ ይህንን መልእክት Reply አድርገህ /approve በል።\n"
-        f"👉 ሁሉንም በአንድ ጊዜ ለማጽደቅ /approve_all በል።"
+        f"👉 ሁሉንም በአንድ ጊዜ ለማጽደቅ /panel ተጠቀም።"
     )
     bot.send_message(ADMIN_ID, admin_text, parse_mode='HTML')
     bot.forward_message(ADMIN_ID, chat_id, message.message_id)
@@ -424,7 +636,7 @@ def call_bingo(message):
     else:
         bot.reply_to(message, "❌ ገና አልተሸነፍክም። (የውሸት ሙከራ)")
 
-# ================= የቀሩት የአስተዳዳሪ ትዕዛዞች (ለጽሑፍ ብቻ) =================
+# ================= 🎯 የአስተዳዳሪ ትዕዛዞች =================
 
 @bot.message_handler(commands=['setprice'])
 def set_price(message):
@@ -446,6 +658,17 @@ def set_account(message):
     except:
         bot.reply_to(message, "እባክህ እንዲህ ጻፍ: /setaccount CBE 1000123456789")
 
+@bot.message_handler(commands=['setinterval'])
+def set_interval(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        interval = int(message.text.split(' ', 1)[1])
+        if interval < 1: interval = 1
+        payment_settings['call_interval'] = interval
+        bot.reply_to(message, f"✅ የጥሪ ፍጥነት ወደ {interval} ሰከንድ ተቀይሯል።")
+    except:
+        bot.reply_to(message, "እባክህ እንዲህ ጻፍ: /setinterval 5")
+
 @bot.message_handler(commands=['approve'])
 def approve_player(message):
     if message.from_user.id != ADMIN_ID: return
@@ -465,6 +688,88 @@ def approve_player(message):
             bot.reply_to(message, "ስህተት: የተጫዋቹን መልእክት Reply አድርገህ /approve በል።")
     else:
         bot.reply_to(message, "እባክህ የተጫዋቹን መልእክት Reply አድርገህ /approve በል።")
+
+@bot.message_handler(commands=['kick'])
+def kick_player(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        target_id = int(message.text.split()[1])
+        chat_id = message.chat.id
+        if chat_id in games:
+            games[chat_id].players.pop(target_id, None)
+            games[chat_id].player_card_numbers.pop(target_id, None)
+            games[chat_id].approved_players.discard(target_id)
+            games[chat_id].pending_players.discard(target_id)
+            bot.reply_to(message, f"👢 ተጫዋች {target_id} ከጨዋታው ተወግዷል።")
+            bot.send_message(target_id, "⚠️ ከጨዋታው ተወግደሃል።")
+    except:
+        bot.reply_to(message, "እባክህ እንዲህ ጻፍ: /kick USER_ID")
+
+@bot.message_handler(commands=['ban'])
+def ban_player(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        target_id = int(message.text.split()[1])
+        banned_players.add(target_id)
+        chat_id = message.chat.id
+        if chat_id in games:
+            games[chat_id].players.pop(target_id, None)
+            games[chat_id].player_card_numbers.pop(target_id, None)
+            games[chat_id].approved_players.discard(target_id)
+            games[chat_id].pending_players.discard(target_id)
+        bot.reply_to(message, f"🚫 ተጫዋች {target_id} ተከልክሏል።")
+    except:
+        bot.reply_to(message, "እባክህ እንዲህ ጻፍ: /ban USER_ID")
+
+@bot.message_handler(commands=['unban'])
+def unban_player(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        target_id = int(message.text.split()[1])
+        banned_players.discard(target_id)
+        bot.reply_to(message, f"🔓 ተጫዋች {target_id} ከእገዳ ተላቋል።")
+    except:
+        bot.reply_to(message, "እባክህ እንዲህ ጻፍ: /unban USER_ID")
+
+@bot.message_handler(commands=['broadcast'])
+def broadcast(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        msg = message.text.split(' ', 1)[1]
+        count = 0
+        # ከታሪክ የተሰበሰቡ ተጠቃሚዎች
+        users = set()
+        for g in game_history:
+            # ማንኛውም የተሳተፈ ተጠቃሚ
+            pass
+        # በአሁኑ ጨዋታ ያሉ
+        for chat_id, game in games.items():
+            for uid in list(game.approved_players) + list(game.pending_players):
+                users.add(uid)
+        for uid in users:
+            try:
+                bot.send_message(uid, f"📢 <b>ማስታወቂያ</b>\n\n{msg}", parse_mode='HTML')
+                count += 1
+            except: pass
+        bot.reply_to(message, f"✅ ለ {count} ተጠቃሚዎች ተልኳል።")
+    except:
+        bot.reply_to(message, "እባክህ እንዲህ ጻፍ: /broadcast የመልእክት ጽሑፍ")
+
+@bot.message_handler(commands=['broadcastvip'])
+def broadcast_vip(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        msg = message.text.split(' ', 1)[1]
+        count = 0
+        for chat_id, game in games.items():
+            for uid in list(game.approved_players):
+                try:
+                    bot.send_message(uid, f"📢 <b>ማስታወቂያ (VIP)</b>\n\n{msg}", parse_mode='HTML')
+                    count += 1
+                except: pass
+        bot.reply_to(message, f"✅ ለ {count} የጸደቁ ተጠቃሚዎች ተልኳል።")
+    except:
+        bot.reply_to(message, "እባክህ እንዲህ ጻፍ: /broadcastvip የመልእክት ጽሑፍ")
 
 if __name__ == "__main__":
     keep_alive()
