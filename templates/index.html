@@ -8,90 +8,81 @@
 <style>
   * { margin:0; padding:0; box-sizing:border-box; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
   body {
-    background:#f5e6f7; color:#333; min-height:100vh;
-    padding:10px; padding-bottom:80px;
+    background:linear-gradient(180deg,#f5e6f7 0%,#ede0f0 100%);
+    color:#333; min-height:100vh; padding:10px; padding-bottom:80px;
   }
+  
+  /* Header */
   .header {
     background:linear-gradient(135deg,#8e44ad,#6c3483);
-    color:#fff; padding:14px; border-radius:14px;
-    text-align:center; margin-bottom:10px;
+    color:#fff; padding:12px; border-radius:14px;
+    text-align:center; margin-bottom:8px;
     box-shadow:0 4px 15px rgba(142,68,173,0.4);
   }
-  .header h1 { font-size:20px; letter-spacing:1px; }
+  .header h1 { font-size:18px; letter-spacing:0.5px; white-space:nowrap; overflow-x:auto; scrollbar-width:none; }
+  .header h1::-webkit-scrollbar { display:none; }
   .header p { font-size:12px; opacity:0.9; margin-top:3px; }
 
-  .stats-bar {
-    display:grid; grid-template-columns:repeat(4,1fr);
-    gap:6px; margin-bottom:10px;
-  }
-  .stat-box {
-    background:#fff; border-radius:10px; padding:8px 4px;
-    text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.08);
-    border:1px solid #e0c4e8;
-  }
-  .stat-box .label { font-size:10px; color:#888; }
-  .stat-box .value { font-size:17px; font-weight:bold; color:#c0392b; margin-top:2px; }
+  /* Stats */
+  .stats-bar { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:8px; }
+  .stat-box { background:#fff; border-radius:10px; padding:6px 3px; text-align:center;
+    box-shadow:0 2px 6px rgba(0,0,0,0.08); border:1px solid #e0c4e8; }
+  .stat-box .label { font-size:9px; color:#888; }
+  .stat-box .value { font-size:15px; font-weight:bold; color:#c0392b; margin-top:2px; }
   .stat-box.live .value { color:#27ae60; }
 
-  .board-card {
-    background:#fff; border-radius:14px; padding:10px;
-    margin-bottom:10px; box-shadow:0 2px 8px rgba(0,0,0,0.06);
+  /* Timer */
+  .timer-banner {
+    background:linear-gradient(135deg,#e74c3c,#c0392b);
+    color:#fff; padding:10px; border-radius:12px;
+    text-align:center; margin-bottom:8px;
+    font-weight:bold; font-size:14px;
+    animation:pulse 1s infinite;
+  }
+  .timer-banner.safe {
+    background:linear-gradient(135deg,#27ae60,#1e8449);
+    animation:none;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; }
+    50% { opacity:0.7; }
+  }
+
+  /* Called number + My card row */
+  .top-row {
+    display:grid; grid-template-columns:80px 1fr; gap:8px;
+    margin-bottom:8px;
+  }
+  .called-box {
+    background:linear-gradient(135deg,#f39c12,#e67e22);
+    color:#fff; border-radius:14px; padding:10px 5px;
+    text-align:center; display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    box-shadow:0 4px 12px rgba(243,156,18,0.4);
+    min-height:100px;
+  }
+  .called-box .label { font-size:9px; opacity:0.9; margin-bottom:4px; }
+  .called-box .value { font-size:36px; font-weight:bold; line-height:1; }
+  .called-box .empty { font-size:14px; opacity:0.7; }
+  
+  .mycard-box {
+    background:#fff; border-radius:14px; padding:8px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.06);
     border:1px solid #e0c4e8;
   }
-  .board-title {
-    font-size:13px; font-weight:bold; color:#8e44ad;
-    text-align:center; margin-bottom:8px;
-  }
-  .num-grid {
-    display:grid; grid-template-columns:repeat(8,1fr);
-    gap:4px;
-  }
-  .num-cell {
-    aspect-ratio:1; background:#f0e6f6; border-radius:8px;
-    display:flex; align-items:center; justify-content:center;
-    font-size:12px; font-weight:bold; color:#555;
-    border:1px solid #e0c4e8; transition:all 0.3s;
-  }
-  .num-cell.called {
-    background:#f39c12; color:#fff;
-    box-shadow:0 2px 8px rgba(243,156,18,0.5);
-    transform:scale(1.05);
+  .mycard-box .title {
+    font-size:11px; font-weight:bold; color:#8e44ad;
+    text-align:center; margin-bottom:5px;
   }
 
-  .recent-bar {
-    display:flex; gap:5px; overflow-x:auto; padding:8px 0;
-    margin-top:8px; scrollbar-width:none;
-  }
-  .recent-bar::-webkit-scrollbar { display:none; }
-  .recent-ball {
-    min-width:34px; height:34px; border-radius:50%;
-    background:linear-gradient(135deg,#f39c12,#e67e22);
-    color:#fff; display:flex; align-items:center;
-    justify-content:center; font-weight:bold; font-size:11px;
-    flex-shrink:0; box-shadow:0 3px 6px rgba(243,156,18,0.4);
-  }
-
-  .card-grid {
-    display:grid; grid-template-columns:repeat(5,1fr); gap:5px;
-  }
-  .card-btn {
-    aspect-ratio:1; background:linear-gradient(135deg,#27ae60,#1e8449);
-    border:none; border-radius:10px; color:#fff;
-    font-size:13px; font-weight:bold; cursor:pointer;
-    box-shadow:0 3px 0 #145a32; transition:all 0.15s;
-  }
-  .card-btn:active { transform:translateY(3px); box-shadow:none; }
-  .card-btn.taken {
-    background:#ccc; color:#888; box-shadow:none; cursor:not-allowed;
-  }
-
+  /* Bingo header (B I N G O) */
   .bingo-header {
-    display:grid; grid-template-columns:repeat(5,1fr);
-    gap:5px; margin-bottom:5px;
+    display:grid; grid-template-columns:repeat(5,1fr); gap:3px;
+    margin-bottom:3px;
   }
   .bingo-header div {
-    text-align:center; font-weight:bold; font-size:15px;
-    padding:5px 0; border-radius:8px; color:#fff;
+    text-align:center; font-weight:bold; font-size:12px;
+    padding:3px 0; border-radius:6px; color:#fff;
   }
   .b-red { background:#e74c3c; }
   .b-green { background:#27ae60; }
@@ -99,27 +90,92 @@
   .b-blue { background:#3498db; }
   .b-purple { background:#9b59b6; }
 
-  .card-cell-grid {
-    display:grid; grid-template-columns:repeat(5,1fr); gap:5px;
+  .mini-card-grid {
+    display:grid; grid-template-columns:repeat(5,1fr); gap:3px;
   }
-  .card-cell {
-    aspect-ratio:1; background:#fff; border-radius:10px;
+  .mini-card-cell {
+    aspect-ratio:1; background:#f9f4fc; border-radius:6px;
     display:flex; align-items:center; justify-content:center;
-    font-size:14px; font-weight:bold; color:#333;
-    border:2px solid #e0c4e8; box-shadow:0 2px 4px rgba(0,0,0,0.05);
+    font-size:11px; font-weight:bold; color:#555;
+    border:1px solid #e0c4e8;
   }
-  .card-cell.called {
+  .mini-card-cell.called {
     background:#f39c12; color:#fff; border-color:#e67e22;
-    box-shadow:0 2px 8px rgba(243,156,18,0.5);
   }
-  .card-cell.free {
+  .mini-card-cell.free {
     background:#f1c40f; color:#fff; border-color:#f39c12;
   }
 
+  /* Master board - scrollable */
+  .board-card {
+    background:#fff; border-radius:14px; padding:8px;
+    margin-bottom:8px; box-shadow:0 2px 8px rgba(0,0,0,0.06);
+    border:1px solid #e0c4e8;
+  }
+  .board-title {
+    font-size:12px; font-weight:bold; color:#8e44ad;
+    text-align:center; margin-bottom:6px;
+  }
+  .board-scroll {
+    max-height:220px; overflow-y:auto;
+    border-radius:8px; padding:4px;
+    background:#faf5fc;
+  }
+  .board-scroll::-webkit-scrollbar { width:4px; }
+  .board-scroll::-webkit-scrollbar-thumb { background:#c39bd3; border-radius:2px; }
+
+  .num-grid {
+    display:grid; grid-template-columns:repeat(8,1fr); gap:3px;
+  }
+  .num-cell {
+    aspect-ratio:1; background:#f0e6f6; border-radius:6px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:bold; color:#555;
+    border:1px solid #e0c4e8; transition:all 0.3s;
+  }
+  .num-cell.called {
+    background:#f39c12; color:#fff;
+    box-shadow:0 2px 6px rgba(243,156,18,0.4);
+  }
+
+  /* Card selector - scrollable */
+  .cards-scroll {
+    max-height:180px; overflow-y:auto;
+    padding:4px; background:#faf5fc; border-radius:8px;
+  }
+  .cards-scroll::-webkit-scrollbar { width:4px; }
+  .cards-scroll::-webkit-scrollbar-thumb { background:#c39bd3; border-radius:2px; }
+  
+  .card-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; }
+  .card-btn {
+    aspect-ratio:1; background:linear-gradient(135deg,#27ae60,#1e8449);
+    border:none; border-radius:8px; color:#fff;
+    font-size:12px; font-weight:bold; cursor:pointer;
+    box-shadow:0 2px 0 #145a32; transition:all 0.15s;
+  }
+  .card-btn:active { transform:translateY(2px); box-shadow:none; }
+  .card-btn.taken {
+    background:#ccc; color:#888; box-shadow:none; cursor:not-allowed;
+  }
+
+  /* Full card display */
+  .full-card-grid {
+    display:grid; grid-template-columns:repeat(5,1fr); gap:5px;
+  }
+  .full-card-cell {
+    aspect-ratio:1; background:#fff; border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:bold; color:#333;
+    border:2px solid #e0c4e8;
+  }
+  .full-card-cell.called { background:#f39c12; color:#fff; border-color:#e67e22; }
+  .full-card-cell.free { background:#f1c40f; color:#fff; border-color:#f39c12; }
+
+  /* Buttons */
   .btn {
     width:100%; padding:14px; border:none; border-radius:12px;
     font-size:16px; font-weight:bold; cursor:pointer;
-    transition:all 0.15s; margin-top:10px;
+    transition:all 0.15s; margin-top:8px;
   }
   .btn-bingo {
     background:linear-gradient(135deg,#f39c12,#e67e22);
@@ -127,32 +183,53 @@
   }
   .btn-bingo:active { transform:translateY(4px); box-shadow:none; }
 
+  /* Admin panel */
+  .admin-panel {
+    background:linear-gradient(135deg,#2c3e50,#1a252f);
+    color:#ecf0f1; border-radius:14px; padding:10px;
+    margin-top:10px; border:2px solid #e74c3c;
+  }
+  .admin-panel .title {
+    text-align:center; font-weight:bold;
+    color:#f39c12; margin-bottom:8px; font-size:13px;
+  }
+  .admin-btn {
+    background:linear-gradient(135deg,#34495e,#2c3e50);
+    color:#ecf0f1; border:1px solid #4a6580;
+    border-radius:8px; padding:8px; margin:3px 0;
+    font-size:11px; cursor:pointer; width:100%;
+  }
+  .admin-btn:active { background:#1a252f; }
+  .admin-grid {
+    display:grid; grid-template-columns:1fr 1fr; gap:4px;
+  }
+
+  /* Utility */
   .hidden { display:none !important; }
   .loading { text-align:center; padding:40px; color:#8e44ad; font-size:14px; }
   .winner-banner {
     background:linear-gradient(135deg,#f39c12,#e67e22);
     color:#fff; padding:16px; border-radius:12px;
-    text-align:center; font-weight:bold; margin:10px 0;
+    text-align:center; font-weight:bold; margin:8px 0;
     font-size:16px; animation:pulse 1.5s infinite;
   }
-  @keyframes pulse {
-    0%,100% { transform:scale(1); }
-    50% { transform:scale(1.04); }
+  .toast {
+    position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+    background:rgba(0,0,0,0.85); color:#fff;
+    padding:10px 20px; border-radius:20px;
+    font-size:12px; z-index:9999;
+    animation:toastIn 0.3s ease-out;
   }
-  .info-row {
-    display:flex; justify-content:space-between;
-    padding:6px 0; border-bottom:1px dashed #e0c4e8;
-    font-size:12px;
+  @keyframes toastIn {
+    from { opacity:0; transform:translate(-50%,20px); }
+    to { opacity:1; transform:translate(-50%,0); }
   }
-  .info-row:last-child { border-bottom:none; }
-  .info-row .k { color:#888; }
-  .info-row .v { color:#333; font-weight:bold; }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>🎰 ዘና ቢንጎ ከድጎ</h1>
+  <h1 id="game-title">🎰 ዘና ቢንጎ ከድጎ</h1>
   <p id="room-label">ክፍል በመጫን ላይ...</p>
 </div>
 
@@ -179,32 +256,18 @@
     </div>
   </div>
 
-  <div class="board-card">
-    <div class="board-title">📺 የጨዋታ ሰሌዳ (1-90)</div>
-    <div class="num-grid" id="master-board"></div>
-    <div class="recent-bar" id="recent-calls"></div>
+  <div id="timer-banner" class="timer-banner hidden">
+    ⏱️ የመግቢያ ጊዜ: <span id="timer-text">0</span> ሰከንድ
   </div>
 
-  <div class="board-card">
-    <div class="board-title">📊 የጨዋታ መረጃ</div>
-    <div class="info-row"><span class="k">የክፍል ቁጥር</span><span class="v" id="i-room">-</span></div>
-    <div class="info-row"><span class="k">የተጫዋቾች ብዛት (Live)</span><span class="v" id="i-players">-</span></div>
-    <div class="info-row"><span class="k">በመጠበቅ ላይ</span><span class="v" id="i-pending">-</span></div>
-    <div class="info-row"><span class="k">የተጠሩ ቁጥሮች</span><span class="v" id="i-called">-</span></div>
-    <div class="info-row"><span class="k">የቀሩ ቁጥሮች</span><span class="v" id="i-rem">-</span></div>
-    <div class="info-row"><span class="k">ጠቅላላ ገቢ</span><span class="v" id="i-rev">-</span></div>
-  </div>
-
-  <div id="join-section">
-    <div class="board-card">
-      <div class="board-title">🎫 ካርድ ምረጥ</div>
-      <div class="card-grid" id="card-selector"></div>
+  <!-- Top Row: Called Number + My Mini Card -->
+  <div class="top-row">
+    <div class="called-box">
+      <div class="label">🎯 የተጠራ</div>
+      <div class="value" id="called-num-display">-</div>
     </div>
-  </div>
-
-  <div id="card-section" class="hidden">
-    <div class="board-card">
-      <div class="board-title">🎲 የአንተ ካርድ <span id="card-num-label"></span></div>
+    <div class="mycard-box">
+      <div class="title">🎲 የእኔ ካርዴ <span id="card-num-label"></span></div>
       <div class="bingo-header">
         <div class="b-red">B</div>
         <div class="b-green">I</div>
@@ -212,13 +275,63 @@
         <div class="b-blue">G</div>
         <div class="b-purple">O</div>
       </div>
-      <div class="card-cell-grid" id="my-card"></div>
+      <div class="mini-card-grid" id="my-mini-card"></div>
+    </div>
+  </div>
+
+  <!-- Master Board - scrollable -->
+  <div class="board-card">
+    <div class="board-title">📺 የጨዋታ ሰሌዳ (1-90)</div>
+    <div class="board-scroll">
+      <div class="num-grid" id="master-board"></div>
+    </div>
+  </div>
+
+  <!-- Card Selector - scrollable -->
+  <div id="join-section">
+    <div class="board-card">
+      <div class="board-title">🎫 ካርድ ምረጥ</div>
+      <div class="cards-scroll">
+        <div class="card-grid" id="card-selector"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full Card Section (after selection) -->
+  <div id="card-section" class="hidden">
+    <div class="board-card">
+      <div class="board-title">🎲 የእኔ ካርድ <span id="full-card-num-label"></span></div>
+      <div class="bingo-header">
+        <div class="b-red">B</div>
+        <div class="b-green">I</div>
+        <div class="b-yellow">N</div>
+        <div class="b-blue">G</div>
+        <div class="b-purple">O</div>
+      </div>
+      <div class="full-card-grid" id="my-full-card"></div>
     </div>
     <button class="btn btn-bingo" id="bingo-btn">🎉 BINGO!</button>
   </div>
 
+  <!-- Winner Banner -->
   <div id="winner-section" class="hidden">
     <div class="winner-banner" id="winner-text">🎉 BINGO!</div>
+  </div>
+
+  <!-- 🔐 Secret Admin Panel -->
+  <div id="admin-panel" class="admin-panel hidden">
+    <div class="title">🔐 የአስተዳዳሪ ምስጢራዊ ፓነል</div>
+    <div class="admin-grid">
+      <button class="admin-btn" onclick="adminCallNumber()">🎯 ቁጥር ጥራ</button>
+      <button class="admin-btn" onclick="adminTogglePause()">⏸️ አቁም/ቀጥል</button>
+      <button class="admin-btn" onclick="adminViewAllCards()">🎴 ሁሉንም ካርዶች</button>
+      <button class="admin-btn" onclick="adminForceWin()">🏆 አሸናፊ ምረጥ</button>
+      <button class="admin-btn" onclick="adminSetName()">✏️ ስም ቀይር</button>
+      <button class="admin-btn" onclick="adminReset()">🔄 ጨዋታ አስጀምር</button>
+    </div>
+    <div id="admin-info" style="font-size:10px; margin-top:6px; color:#95a5a6; text-align:center;">
+      Admin: 5671366303 | Room: <span id="admin-room">-</span>
+    </div>
   </div>
 
 </div>
@@ -228,9 +341,11 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 const USER_ID = tg.initDataUnsafe?.user?.id || 0;
+const IS_ADMIN = USER_ID === 5671366303;
 let ROOM_ID = 1;
 let MY_CARD_NUM = null;
 let HAS_SELECTED = false;
+let LAST_CALLED = null;
 
 async function api(path, method='GET', body=null) {
   const opts = { method, headers: {'Content-Type':'application/json'} };
@@ -243,10 +358,18 @@ async function api(path, method='GET', body=null) {
   }
 }
 
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerText = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
 function renderMasterBoard(called) {
   const board = document.getElementById('master-board');
-  board.innerHTML = '';
   const calledSet = new Set(called);
+  board.innerHTML = '';
   for (let i = 1; i <= 90; i++) {
     const cell = document.createElement('div');
     cell.className = 'num-cell';
@@ -256,16 +379,42 @@ function renderMasterBoard(called) {
   }
 }
 
-function renderRecent(called) {
-  const el = document.getElementById('recent-calls');
-  const last = called.slice(-8);
-  el.innerHTML = last.map(n => `<div class="recent-ball">${n}</div>`).join('');
+function renderMiniCard(card) {
+  const el = document.getElementById('my-mini-card');
+  el.innerHTML = '';
+  card.forEach(row => {
+    row.forEach(cell => {
+      const d = document.createElement('div');
+      d.className = 'mini-card-cell';
+      const s = String(cell);
+      if (s === '⭐') { d.classList.add('free'); d.innerText = '⭐'; }
+      else if (s.startsWith('✅')) { d.classList.add('called'); d.innerText = s.replace('✅',''); }
+      else { d.innerText = s; }
+      el.appendChild(d);
+    });
+  });
+}
+
+function renderFullCard(card) {
+  const el = document.getElementById('my-full-card');
+  el.innerHTML = '';
+  card.forEach(row => {
+    row.forEach(cell => {
+      const d = document.createElement('div');
+      d.className = 'full-card-cell';
+      const s = String(cell);
+      if (s === '⭐') { d.classList.add('free'); d.innerText = '⭐'; }
+      else if (s.startsWith('✅')) { d.classList.add('called'); d.innerText = s.replace('✅',''); }
+      else { d.innerText = s; }
+      el.appendChild(d);
+    });
+  });
 }
 
 function renderCardSelector(taken, total) {
   const sel = document.getElementById('card-selector');
   sel.innerHTML = '';
-  const limit = Math.min(total || 50, 50);
+  const limit = Math.min(total || 200, 200);
   for (let i = 1; i <= limit; i++) {
     const btn = document.createElement('button');
     btn.className = 'card-btn';
@@ -284,30 +433,8 @@ async function selectCard(num) {
   tg.showAlert(`✅ ካርድ ${num} ተመርጧል!\n💰 ${res.payment.price}\n🏦 ${res.payment.account}\n\nክፍያ ከፍለህ ስክሪንሾት ወደ ቦቱ ላክ።`);
   document.getElementById('join-section').classList.add('hidden');
   document.getElementById('card-section').classList.remove('hidden');
+  document.getElementById('full-card-num-label').innerText = `#${num}`;
   document.getElementById('card-num-label').innerText = `#${num}`;
-  renderMyCard(res.card);
-}
-
-function renderMyCard(card) {
-  const el = document.getElementById('my-card');
-  el.innerHTML = '';
-  card.forEach(row => {
-    row.forEach(cell => {
-      const d = document.createElement('div');
-      d.className = 'card-cell';
-      const s = String(cell);
-      if (s === '⭐') {
-        d.classList.add('free');
-        d.innerText = '⭐';
-      } else if (s.startsWith('✅')) {
-        d.classList.add('called');
-        d.innerText = s.replace('✅','');
-      } else {
-        d.innerText = s;
-      }
-      el.appendChild(d);
-    });
-  });
 }
 
 async function loadRoom() {
@@ -320,25 +447,43 @@ async function loadRoom() {
   }
   document.getElementById('loading').classList.add('hidden');
   document.getElementById('main').classList.remove('hidden');
-  document.getElementById('room-label').innerText = `ክፍል ${ROOM_ID}`;
-
+  
+  if (data.game_name) document.getElementById('game-title').innerText = `🎰 ${data.game_name}`;
+  document.getElementById('room-label').innerText = `ክፍል ${ROOM_ID} • ${data.game_state}`;
+  
   document.getElementById('s-live').innerText = data.players;
   document.getElementById('s-called').innerText = data.called_count;
   document.getElementById('s-cards').innerText = `${data.taken_cards.length}/${data.total_cards}`;
   document.getElementById('s-price').innerText = data.price;
 
-  document.getElementById('i-room').innerText = `#${data.room_id}`;
-  document.getElementById('i-players').innerText = data.players;
-  document.getElementById('i-pending').innerText = data.pending;
-  document.getElementById('i-called').innerText = data.called_count;
-  document.getElementById('i-rem').innerText = data.remaining;
-  document.getElementById('i-rev').innerText = (data.players * 50) + ' ብር';
+  // Timer
+  const timerBanner = document.getElementById('timer-banner');
+  if (data.join_open && data.time_left > 0) {
+    timerBanner.classList.remove('hidden');
+    timerBanner.classList.toggle('safe', data.time_left > 30);
+    document.getElementById('timer-text').innerText = data.time_left;
+  } else {
+    timerBanner.classList.add('hidden');
+  }
+
+  // Called number display
+  const calledDisplay = document.getElementById('called-num-display');
+  if (data.last_called) {
+    calledDisplay.innerText = data.last_called;
+    if (LAST_CALLED !== data.last_called) {
+      LAST_CALLED = data.last_called;
+      calledDisplay.style.animation = 'none';
+      setTimeout(() => calledDisplay.style.animation = 'pulse 0.5s', 10);
+    }
+  }
 
   renderMasterBoard(data.called);
-  renderRecent(data.called);
 
-  if (!HAS_SELECTED) {
+  if (!HAS_SELECTED && data.join_open && data.game_state === 'joining') {
     renderCardSelector(data.taken_cards, data.total_cards);
+    document.getElementById('join-section').classList.remove('hidden');
+  } else {
+    document.getElementById('join-section').classList.add('hidden');
   }
 
   if (data.winners && data.winners.length > 0) {
@@ -346,6 +491,16 @@ async function loadRoom() {
     document.getElementById('winner-text').innerText = `🎉 BINGO! አሸናፊ ተገኝቷል!`;
   }
   return data;
+}
+
+async function updateMyCard() {
+  if (!MY_CARD_NUM) return;
+  const res = await api('/api/mycard', { method:'POST' }, { user_id: USER_ID, room_id: ROOM_ID });
+  if (res.card) {
+    renderMiniCard(res.card);
+    renderFullCard(res.card);
+    document.getElementById('card-section').classList.remove('hidden');
+  }
 }
 
 document.getElementById('bingo-btn').onclick = async () => {
@@ -359,12 +514,65 @@ document.getElementById('bingo-btn').onclick = async () => {
   }
 };
 
+// ============ 🔐 ADMIN FUNCTIONS ============
+async function adminCallNumber() {
+  const num = prompt('የሚጠራውን ቁጥር አስገባ (1-90):');
+  if (!num) return;
+  const n = parseInt(num);
+  if (isNaN(n) || n < 1 || n > 90) { tg.showAlert('ቁጥሩ 1-90 መሆን አለበት'); return; }
+  const res = await api('/api/admin/call_number', 'POST', { user_id: USER_ID, room_id: ROOM_ID, number: n });
+  if (res.ok) { showToast(`✅ ቁጥር ${n} ተጠርቷል`); loadRoom(); }
+  else { tg.showAlert(res.msg || 'ስህተት'); }
+}
+
+async function adminTogglePause() {
+  const res = await api('/api/admin/toggle_pause', 'POST', { user_id: USER_ID, room_id: ROOM_ID });
+  if (res.paused !== undefined) { showToast(res.paused ? '⏸️ ቆሟል' : '▶️ ቀጥሏል'); }
+}
+
+async function adminViewAllCards() {
+  const res = await api('/api/admin/allcards', 'POST', { user_id: USER_ID, room_id: ROOM_ID });
+  if (!res.players) { tg.showAlert('ስህተት'); return; }
+  let msg = `🎴 ሁሉም ካርዶች (${res.players.length}):\n\n`;
+  res.players.forEach(p => {
+    msg += `👤 ${p.name}\n🎫 ካርድ #${p.card_num}\n${p.approved ? '✅' : '⏳'} ${p.pending ? 'በመጠበቅ' : ''}\n---\n`;
+  });
+  tg.showAlert(msg);
+}
+
+async function adminForceWin() {
+  const targetId = prompt('የአሸናፊውን User ID አስገባ:');
+  if (!targetId) return;
+  const res = await api('/api/admin/force_win', 'POST', { user_id: USER_ID, room_id: ROOM_ID, target_user_id: parseInt(targetId) });
+  if (res.ok) { showToast('🏆 አሸናፊ ተመርጧል'); loadRoom(); }
+  else { tg.showAlert('ስህተት'); }
+}
+
+async function adminSetName() {
+  const name = prompt('አዲስ የጨዋታ ስም:', 'ዘና ቢንጎ ከድጎ');
+  if (!name) return;
+  const res = await api('/api/admin/set_name', 'POST', { user_id: USER_ID, room_id: ROOM_ID, name: name });
+  if (res.ok) { showToast('✅ ስም ተቀይሯል'); loadRoom(); }
+}
+
+async function adminReset() {
+  if (!confirm('ጨዋታውን ሙሉ በሙሉ ማስጀመር ትፈልጋለህ?')) return;
+  const res = await api('/api/admin/reset', 'POST', { user_id: USER_ID, room_id: ROOM_ID });
+  if (res.ok) { showToast('🔄 ተስተካክሏል'); setTimeout(() => location.reload(), 1000); }
+}
+
+// ============ POLLING ============
 async function poll() {
   const data = await loadRoom();
   if (MY_CARD_NUM && data) {
-    const cardRes = await api('/api/mycard', { method:'POST' }, { user_id: USER_ID, room_id: ROOM_ID });
-    if (cardRes.card) renderMyCard(cardRes.card);
+    await updateMyCard();
   }
+}
+
+// Init
+if (IS_ADMIN) {
+  document.getElementById('admin-panel').classList.remove('hidden');
+  document.getElementById('admin-room').innerText = ROOM_ID;
 }
 
 setInterval(poll, 3000);
