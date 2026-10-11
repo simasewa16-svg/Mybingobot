@@ -22,9 +22,11 @@ class BingoGame:
         self.players = {}
         self.player_card_numbers = {}
         self.called_numbers = []
-        self.available_numbers = self.generate_pool()
+        self.available_numbers = [i for i in range(1, 91)]
+        random.shuffle(self.available_numbers)
         self.is_active = False
         self.join_open = False
+        self.game_state = 'idle'  # idle, joining, playing, finished
         self.winners = []
         self.card_pool = self.generate_card_pool(200)
         self.taken_cards = set()
@@ -32,11 +34,11 @@ class BingoGame:
         self.approved_players = set()
         self.used_receipts = set()
         self.chat_id = None
-
-    def generate_pool(self):
-        pool = [i for i in range(1, 91)]
-        random.shuffle(pool)
-        return pool
+        self.join_deadline = None
+        self.game_name = "ዘና ቢንጎ ከድጎ"
+        self.last_called = None
+        self.paused = False
+        self.lock = threading.Lock()
 
     def generate_single_card(self):
         card = []
@@ -82,7 +84,7 @@ payment_settings = {
 
 banned_players = set()
 
-# ================= 🌐 Flask API =================
+# ================= 🌐 Public API =================
 
 @app.route('/')
 def index():
@@ -93,10 +95,20 @@ def api_room_info(room_id):
     if room_id not in rooms:
         return jsonify({'error': 'not found'}), 404
     r = rooms[room_id]
+    now = time.time()
+    time_left = 0
+    if r.join_deadline and r.join_open:
+        time_left = max(0, int(r.join_deadline - now))
+        if time_left == 0 and r.game_state == 'joining':
+            r.join_open = False
     return jsonify({
         'room_id': room_id,
+        'game_name': r.game_name,
+        'game_state': r.game_state,
         'is_active': r.is_active,
         'join_open': r.join_open,
+        'join_deadline': r.join_deadline,
+        'time_left': time_left,
         'players': len(r.approved_players),
         'pending': len(r.pending_players),
         'called': r.called_numbers,
@@ -106,6 +118,8 @@ def api_room_info(room_id):
         'winners': r.winners,
         'taken_cards': list(r.taken_cards),
         'total_cards': len(r.card_pool),
+        'last_called': r.last_called,
+        'paused': r.paused,
     })
 
 @app.route('/api/join', methods=['POST'])
@@ -120,15 +134,19 @@ def api_join():
     if room_id not in rooms:
         return jsonify({'ok': False, 'msg': '⚠️ ክፍል አልተገኘም'})
     r = rooms[room_id]
-    if not r.is_active or not r.join_open:
-        return jsonify({'ok': False, 'msg': '⏰ የመመዝገብ ጊዜ አልፏል'})
+    
+    if r.game_state == 'playing' or r.game_state == 'finished':
+        return jsonify({'ok': False, 'msg': '🔒 ጨዋታ ተጀምሯል! ሌላ ጨዋታ ጠብቅ።'})
+    if not r.join_open:
+        return jsonify({'ok': False, 'msg': '⏰ የመግቢያ ጊዜ አልፏል!'})
     if user_id in r.players:
         return jsonify({'ok': False, 'msg': '⛔ ካርድ መርጠሃል!'})
+    
     card_index = card_num - 1
     if card_index < 0 or card_index >= len(r.card_pool):
         return jsonify({'ok': False, 'msg': '⚠️ ካርድ አልተገኘም'})
     if card_index in r.taken_cards:
-        return jsonify({'ok': False, 'msg': '❌ ተወስዷል'})
+        return jsonify({'ok': False, 'msg': f'❌ ካርድ {card_num} አስቀድሞ ተወስዷል!'})
 
     r.taken_cards.add(card_index)
     selected_card = r.card_pool[card_index]
@@ -140,6 +158,7 @@ def api_join():
         'ok': True,
         'card': selected_card,
         'card_num': card_num,
+        'called': r.called_numbers,
         'payment': {
             'price': payment_settings['price'],
             'account': payment_settings['account'],
@@ -156,8 +175,7 @@ def api_mycard():
     r = rooms[room_id]
     if user_id not in r.players:
         return jsonify({'error': 'no card'}), 404
-    if user_id not in r.approved_players:
-        return jsonify({'error': 'not approved'}), 403
+    
     card = r.players[user_id]
     called_set = set(r.called_numbers)
     marked = []
@@ -171,7 +189,12 @@ def api_mycard():
             else:
                 new_row.append(str(num))
         marked.append(new_row)
-    return jsonify({'card': marked, 'card_num': r.player_card_numbers.get(user_id)})
+    return jsonify({
+        'card': marked,
+        'card_num': r.player_card_numbers.get(user_id),
+        'called': r.called_numbers,
+        'approved': user_id in r.approved_players,
+    })
 
 @app.route('/api/bingo', methods=['POST'])
 def api_bingo():
@@ -192,8 +215,8 @@ def api_bingo():
         r.winners.append(user_id)
         card_num = r.player_card_numbers.get(user_id, "?")
         try:
-            user_info = bot.get_chat(user_id)
-            name = f"@{user_info.username}" if user_info.username else user_info.first_name
+            info = bot.get_chat(user_id)
+            name = f"@{info.username}" if info.username else info.first_name
         except:
             name = f"ID: {user_id}"
         if r.chat_id:
@@ -201,8 +224,116 @@ def api_bingo():
             except: pass
         bot.send_message(ADMIN_ID, f"🎉 BINGO! {name} አሸንፏል! (ካርድ: {card_num})")
         r.is_active = False
+        r.game_state = 'finished'
         return jsonify({'ok': True, 'winner': name, 'card_num': card_num})
     return jsonify({'ok': False, 'msg': '❌ ገና አልተሸነፍክም'})
+
+# ================= 🔐 Secret Admin API =================
+
+@app.route('/api/admin/allcards', methods=['POST'])
+def api_admin_allcards():
+    data = request.json
+    if data.get('user_id') != ADMIN_ID:
+        return jsonify({'error': 'unauthorized'}), 403
+    room_id = data.get('room_id')
+    if room_id not in rooms:
+        return jsonify({'error': 'not found'}), 404
+    r = rooms[room_id]
+    result = []
+    for uid, card in r.players.items():
+        try:
+            info = bot.get_chat(uid)
+            name = f"@{info.username}" if info.username else info.first_name
+        except:
+            name = f"ID: {uid}"
+        result.append({
+            'user_id': uid,
+            'name': name,
+            'card_num': r.player_card_numbers.get(uid),
+            'card': card,
+            'approved': uid in r.approved_players,
+            'pending': uid in r.pending_players,
+            'winner': uid in r.winners,
+        })
+    return jsonify({'players': result})
+
+@app.route('/api/admin/call_number', methods=['POST'])
+def api_admin_call_number():
+    data = request.json
+    if data.get('user_id') != ADMIN_ID:
+        return jsonify({'error': 'unauthorized'}), 403
+    room_id = data.get('room_id')
+    num = data.get('number')
+    if room_id not in rooms:
+        return jsonify({'error': 'not found'}), 404
+    r = rooms[room_id]
+    if num in r.called_numbers:
+        return jsonify({'ok': False, 'msg': 'ቁጥሩ አስቀድሞ ተጠርቷል'})
+    if num in r.available_numbers:
+        r.available_numbers.remove(num)
+    r.called_numbers.append(num)
+    r.last_called = num
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/force_win', methods=['POST'])
+def api_admin_force_win():
+    data = request.json
+    if data.get('user_id') != ADMIN_ID:
+        return jsonify({'error': 'unauthorized'}), 403
+    room_id = data.get('room_id')
+    target = data.get('target_user_id')
+    if room_id not in rooms:
+        return jsonify({'error': 'not found'}), 404
+    r = rooms[room_id]
+    if target in r.players:
+        r.winners.append(target)
+        card_num = r.player_card_numbers.get(target, "?")
+        try:
+            info = bot.get_chat(target)
+            name = f"@{info.username}" if info.username else info.first_name
+        except:
+            name = f"ID: {target}"
+        if r.chat_id:
+            try: bot.send_message(r.chat_id, f"🏆 አስተዳዳሪው {name} አሸናፊ አድርጎታል! (ካርድ: {card_num})")
+            except: pass
+        r.is_active = False
+        r.game_state = 'finished'
+        return jsonify({'ok': True})
+    return jsonify({'ok': False})
+
+@app.route('/api/admin/toggle_pause', methods=['POST'])
+def api_admin_toggle_pause():
+    data = request.json
+    if data.get('user_id') != ADMIN_ID:
+        return jsonify({'error': 'unauthorized'}), 403
+    room_id = data.get('room_id')
+    if room_id not in rooms:
+        return jsonify({'error': 'not found'}), 404
+    r = rooms[room_id]
+    r.paused = not r.paused
+    return jsonify({'paused': r.paused})
+
+@app.route('/api/admin/reset', methods=['POST'])
+def api_admin_reset():
+    data = request.json
+    if data.get('user_id') != ADMIN_ID:
+        return jsonify({'error': 'unauthorized'}), 403
+    room_id = data.get('room_id')
+    if room_id in rooms:
+        del rooms[room_id]
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/set_name', methods=['POST'])
+def api_admin_set_name():
+    data = request.json
+    if data.get('user_id') != ADMIN_ID:
+        return jsonify({'error': 'unauthorized'}), 403
+    room_id = data.get('room_id')
+    name = data.get('name', '').strip()
+    if room_id in rooms and name:
+        rooms[room_id].game_name = name
+        return jsonify({'ok': True})
+    return jsonify({'ok': False})
 
 # ================= 🤖 የቦት ክፍል =================
 
@@ -247,11 +378,14 @@ def handle_admin(call):
         rooms[rid] = BingoGame(rid)
         rooms[rid].is_active = True
         rooms[rid].join_open = True
+        rooms[rid].game_state = 'joining'
         rooms[rid].chat_id = chat_id
+        rooms[rid].join_deadline = time.time() + 120  # 2 ደቂቃ ለመግቢያ
         bot.send_message(chat_id,
-            f"🎮 <b>ክፍል {rid} ተከፍቷል!</b>\n\n"
+            f"🎮 <b>{rooms[rid].game_name} - ክፍል {rid} ተከፍቷል!</b>\n\n"
             f"💰 ዋጋ: {payment_settings['price']}\n"
-            f"🎫 ካርዶች: 1-{len(rooms[rid].card_pool)}\n\n"
+            f"🎫 ካርዶች: 1-{len(rooms[rid].card_pool)}\n"
+            f"⏱️ የመግቢያ ጊዜ: 2 ደቂቃ\n\n"
             f"👇 ተጫዋቾች የቢንጎ ገጹን ከፍተው ካርድ ይምረጡ:",
             reply_markup=get_main_panel(rid), parse_mode='HTML')
 
@@ -259,7 +393,7 @@ def handle_admin(call):
         text = "📋 <b>የክፍት ክፍሎች</b>\n\n"
         for rid, r in rooms.items():
             status = "🟢" if r.is_active else "🔴"
-            text += f"{status} ክፍል {rid}: {len(r.approved_players)} ተጫዋቾች\n"
+            text += f"{status} ክፍል {rid}: {len(r.approved_players)} ተጫዋቾች | {r.game_state}\n"
         if not rooms: text = "ምንም ክፍል የለም።"
         bot.send_message(chat_id, text, parse_mode='HTML')
 
@@ -284,14 +418,16 @@ def handle_admin(call):
             bot.answer_callback_query(call.id, "⚠️ ተጫዋች የለም!")
             return
         r.join_open = False
+        r.game_state = 'playing'
         threading.Thread(target=auto_call_loop, args=(rid,), daemon=True).start()
         bot.answer_callback_query(call.id, "▶️ ተጀምሯል!")
-        bot.send_message(chat_id, f"▶️ ክፍል {rid} ተጀመረ!")
+        bot.send_message(chat_id, f"▶️ ክፍል {rid} ጨዋታ ተጀመረ!")
 
     elif data.startswith("adm_stop_"):
         rid = int(data.split('_')[2])
         if rid in rooms:
             rooms[rid].is_active = False
+            rooms[rid].game_state = 'finished'
         bot.answer_callback_query(call.id, "🛑 ቆሟል!")
         bot.send_message(chat_id, f"🛑 ክፍል {rid} ተቋርጧል።")
 
@@ -300,6 +436,7 @@ def handle_admin(call):
         if rid not in rooms: return
         r = rooms[rid]
         text = f"📊 <b>ዳሽቦርድ - ክፍል {rid}</b>\n\n"
+        text += f"🎮 ሁኔታ: {r.game_state}\n"
         text += f"👥 የጸደቁ: {len(r.approved_players)}\n"
         text += f"⏳ በመጠበቅ: {len(r.pending_players)}\n"
         text += f"📢 የተጠሩ: {len(r.called_numbers)}\n"
@@ -323,14 +460,17 @@ def auto_call_loop(room_id):
     while r.is_active:
         time.sleep(interval)
         if not r.is_active: break
+        if r.paused: continue
         if not r.available_numbers:
             if r.chat_id:
                 try: bot.send_message(r.chat_id, "⚠️ ሁሉም ቁጥሮች ተጠርተዋል!")
                 except: pass
             r.is_active = False
+            r.game_state = 'finished'
             break
         num = r.available_numbers.pop()
         r.called_numbers.append(num)
+        r.last_called = num
         if r.chat_id:
             try: bot.send_message(r.chat_id, f"📢 ክፍል {room_id}: 🎯 ቁጥር <b>{num}</b>", parse_mode='HTML')
             except: pass
@@ -353,6 +493,7 @@ def auto_call_loop(room_id):
                     except: pass
                 bot.send_message(ADMIN_ID, f"🏆 አሸናፊ: {name} | ካርድ: {card_num}")
             r.is_active = False
+            r.game_state = 'finished'
             break
 
 # ================= 📥 የክፍያ ስክሪንሾት =================
