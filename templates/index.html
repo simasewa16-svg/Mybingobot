@@ -6,97 +6,94 @@
 <title>ዘና ቢንጎ ከድጎ</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
-  body { background:linear-gradient(180deg,#f5e6f7 0%,#ede0f0 100%); color:#333; min-height:100vh; padding:10px; padding-bottom:80px; }
-  .header { background:linear-gradient(135deg,#8e44ad,#6c3483); color:#fff; padding:12px; border-radius:14px; text-align:center; margin-bottom:8px; box-shadow:0 4px 15px rgba(142,68,173,0.4); }
-  .header h1 { font-size:18px; }
-  .header p { font-size:12px; opacity:0.9; margin-top:3px; }
-  .welcome-bar { background:linear-gradient(135deg,#27ae60,#1e8449); color:#fff; padding:10px; border-radius:12px; margin-bottom:8px; font-size:12px; text-align:center; }
-  .balance-bar { background:linear-gradient(135deg,#27ae60,#1e8449); color:#fff; padding:10px; border-radius:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
-  .balance-bar .label { font-size:11px; opacity:0.9; }
-  .balance-bar .value { font-size:18px; font-weight:bold; }
-  .balance-bar button { background:rgba(255,255,255,0.25); border:1px solid #fff; color:#fff; padding:5px 10px; border-radius:8px; font-size:11px; cursor:pointer; margin-left:4px; }
-  .stats-bar { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:8px; }
-  .stat-box { background:#fff; border-radius:10px; padding:6px 3px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.08); border:1px solid #e0c4e8; }
-  .stat-box .label { font-size:9px; color:#888; }
-  .stat-box .value { font-size:15px; font-weight:bold; color:#c0392b; margin-top:2px; }
-  .stat-box.live .value { color:#27ae60; }
-  .jackpot-bar { background:linear-gradient(135deg,#f39c12,#e67e22,#f39c12); background-size:200% 200%; animation:jackpotGlow 2s infinite; color:#fff; padding:10px; border-radius:12px; margin-bottom:8px; text-align:center; font-weight:bold; font-size:14px; }
-  @keyframes jackpotGlow { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
-  .timer-banner { background:linear-gradient(135deg,#e74c3c,#c0392b); color:#fff; padding:10px; border-radius:12px; text-align:center; margin-bottom:8px; font-weight:bold; font-size:14px; animation:pulse 1s infinite; }
-  .timer-banner.safe { background:linear-gradient(135deg,#27ae60,#1e8449); animation:none; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
-  .top-row { display:grid; grid-template-columns:80px 1fr; gap:8px; margin-bottom:8px; }
-  .called-box { background:linear-gradient(135deg,#f39c12,#e67e22); color:#fff; border-radius:14px; padding:10px 5px; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100px; box-shadow:0 4px 12px rgba(243,156,18,0.4); }
-  .called-box .label { font-size:9px; opacity:0.9; margin-bottom:4px; }
-  .called-box .value { font-size:36px; font-weight:bold; line-height:1; }
-  .mycard-box { background:#fff; border-radius:14px; padding:8px; box-shadow:0 2px 8px rgba(0,0,0,0.06); border:1px solid #e0c4e8; }
-  .mycard-box .title { font-size:11px; font-weight:bold; color:#8e44ad; text-align:center; margin-bottom:5px; }
-  .bingo-header { display:grid; grid-template-columns:repeat(5,1fr); gap:3px; margin-bottom:3px; }
-  .bingo-header div { text-align:center; font-weight:bold; font-size:12px; padding:3px 0; border-radius:6px; color:#fff; }
-  .b-red{background:#e74c3c} .b-green{background:#27ae60} .b-yellow{background:#f39c12} .b-blue{background:#3498db} .b-purple{background:#9b59b6}
-  .mini-card-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:3px; }
-  .mini-card-cell { aspect-ratio:1; background:#f9f4fc; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:bold; color:#555; border:1px solid #e0c4e8; }
-  .mini-card-cell.called { background:#27ae60; color:#fff; border-color:#1e8449; }
-  .mini-card-cell.free { background:#f1c40f; color:#fff; }
-  .board-card { background:#fff; border-radius:14px; padding:8px; margin-bottom:8px; box-shadow:0 2px 8px rgba(0,0,0,0.06); border:1px solid #e0c4e8; }
-  .board-title { font-size:12px; font-weight:bold; color:#8e44ad; text-align:center; margin-bottom:6px; }
-  .board-scroll { max-height:220px; overflow-y:auto; border-radius:8px; padding:4px; background:#faf5fc; }
-  .board-scroll::-webkit-scrollbar { width:4px; }
-  .board-scroll::-webkit-scrollbar-thumb { background:#c39bd3; border-radius:2px; }
-  .num-grid { display:grid; grid-template-columns:repeat(8,1fr); gap:3px; }
-  .num-cell { aspect-ratio:1; background:#f0e6f6; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:bold; color:#555; border:1px solid #e0c4e8; }
-  .num-cell.called { background:#f39c12; color:#fff; }
-  .cards-scroll { max-height:180px; overflow-y:auto; padding:4px; background:#faf5fc; border-radius:8px; }
-  .cards-scroll::-webkit-scrollbar { width:4px; }
-  .cards-scroll::-webkit-scrollbar-thumb { background:#c39bd3; border-radius:2px; }
-  .card-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; }
-  .card-btn { aspect-ratio:1; background:linear-gradient(135deg,#27ae60,#1e8449); border:none; border-radius:8px; color:#fff; font-size:12px; font-weight:bold; cursor:pointer; box-shadow:0 2px 0 #145a32; }
-  .card-btn.taken { background:#ccc; color:#888; box-shadow:none; cursor:not-allowed; }
-  .full-card-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; margin-bottom:10px; }
-  .full-card-cell { aspect-ratio:1; background:#fff; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:bold; color:#333; border:2px solid #e0c4e8; }
-  .full-card-cell.called { background:#27ae60; color:#fff; border-color:#1e8449; }
-  .full-card-cell.free { background:#f1c40f; color:#fff; }
-  .btn { width:100%; padding:14px; border:none; border-radius:12px; font-size:16px; font-weight:bold; cursor:pointer; margin-top:8px; }
-  .btn-bingo { background:linear-gradient(135deg,#f39c12,#e67e22); color:#fff; box-shadow:0 4px 0 #b9770e; }
-  .btn-primary { background:linear-gradient(135deg,#27ae60,#1e8449); color:#fff; }
-  .btn-danger { background:linear-gradient(135deg,#e74c3c,#c0392b); color:#fff; }
-  .admin-panel { background:linear-gradient(135deg,#2c3e50,#1a252f); color:#ecf0f1; border-radius:14px; padding:10px; margin-top:10px; border:2px solid #e74c3c; }
-  .admin-panel .title { text-align:center; font-weight:bold; color:#f39c12; margin-bottom:8px; font-size:13px; }
-  .admin-section { background:rgba(255,255,255,0.05); border-radius:8px; padding:6px; margin-bottom:6px; }
-  .admin-section-title { font-size:10px; color:#f39c12; margin-bottom:4px; font-weight:bold; }
-  .admin-btn { background:linear-gradient(135deg,#34495e,#2c3e50); color:#ecf0f1; border:1px solid #4a6580; border-radius:6px; padding:6px; margin:2px 0; font-size:10px; cursor:pointer; width:100%; }
-  .admin-grid { display:grid; grid-template-columns:1fr 1fr; gap:3px; }
-  .hidden { display:none !important; }
-  .loading { text-align:center; padding:40px; color:#8e44ad; font-size:14px; }
-  .winner-section { background:linear-gradient(135deg,#f39c12,#e67e22,#f39c12); background-size:200% 200%; animation:winnerGlow 2s infinite; color:#fff; padding:20px; border-radius:18px; text-align:center; margin:10px 0; box-shadow:0 8px 25px rgba(243,156,18,0.6); border:3px solid #fff; }
-  @keyframes winnerGlow { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
-  .winner-section .crown { font-size:48px; }
-  .winner-section .congrats { font-size:22px; font-weight:bold; margin:8px 0; }
-  .winner-section .winner-name { background:rgba(255,255,255,0.25); padding:8px 16px; border-radius:20px; font-size:18px; font-weight:bold; display:inline-block; }
-  .winner-section .card-number { background:rgba(255,255,255,0.3); padding:4px 12px; border-radius:12px; font-size:16px; font-weight:bold; display:inline-block; margin-top:6px; }
-  .winner-section .prize { background:rgba(255,255,255,0.4); padding:6px 14px; border-radius:14px; font-size:18px; font-weight:bold; display:inline-block; margin-top:8px; }
-  .winner-section .blessing { font-size:13px; margin-top:12px; padding:8px; background:rgba(255,255,255,0.15); border-radius:10px; font-style:italic; }
-  .toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.9); color:#fff; padding:12px 20px; border-radius:20px; font-size:12px; z-index:9999; max-width:90%; text-align:center; }
-  .modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10000; display:flex; align-items:center; justify-content:center; padding:20px; }
-  .modal { background:#fff; border-radius:16px; padding:20px; max-width:400px; width:100%; max-height:85vh; overflow-y:auto; }
-  .modal h3 { color:#8e44ad; margin-bottom:12px; font-size:16px; text-align:center; }
-  .modal input, .modal textarea, .modal select { width:100%; padding:10px; border:2px solid #e0c4e8; border-radius:8px; margin-bottom:10px; font-size:14px; }
-  .modal button { width:100%; padding:12px; border:none; border-radius:8px; font-weight:bold; font-size:14px; cursor:pointer; margin-top:5px; }
-  .modal .btn-ok { background:#27ae60; color:#fff; }
-  .modal .btn-cancel { background:#ccc; color:#333; }
-  .tabs { display:flex; gap:4px; margin-bottom:8px; }
-  .tab { flex:1; padding:8px; background:#fff; border:2px solid #e0c4e8; border-radius:8px; font-size:11px; font-weight:bold; color:#8e44ad; cursor:pointer; text-align:center; }
-  .tab.active { background:#8e44ad; color:#fff; }
-  .tab-content { display:none; }
-  .tab-content.active { display:block; }
-  .confetti-container { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:9998; overflow:hidden; }
-  .confetti { position:absolute; width:10px; height:10px; animation:confettiFall 3s linear infinite; }
-  @keyframes confettiFall { 0%{transform:translateY(-100vh) rotate(0)} 100%{transform:translateY(100vh) rotate(720deg);opacity:0} }
+  *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+  body{background:linear-gradient(180deg,#f5e6f7,#ede0f0);color:#333;min-height:100vh;padding:10px;padding-bottom:80px}
+  .header{background:linear-gradient(135deg,#8e44ad,#6c3483);color:#fff;padding:12px;border-radius:14px;text-align:center;margin-bottom:8px;box-shadow:0 4px 15px rgba(142,68,173,.4)}
+  .header h1{font-size:18px}
+  .header p{font-size:12px;opacity:.9;margin-top:3px}
+  .welcome-bar{background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;padding:10px;border-radius:12px;margin-bottom:8px;font-size:12px;text-align:center}
+  .balance-bar{background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;padding:10px;border-radius:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+  .balance-bar .label{font-size:11px;opacity:.9}
+  .balance-bar .value{font-size:18px;font-weight:700}
+  .balance-bar button{background:rgba(255,255,255,.25);border:1px solid #fff;color:#fff;padding:5px 10px;border-radius:8px;font-size:11px;cursor:pointer;margin-left:4px}
+  .jackpot-bar{background:linear-gradient(135deg,#f39c12,#e67e22,#f39c12);background-size:200% 200%;animation:jg 2s infinite;color:#fff;padding:10px;border-radius:12px;margin-bottom:8px;text-align:center;font-weight:700;font-size:14px}
+  @keyframes jg{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+  .stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px}
+  .stat-box{background:#fff;border-radius:10px;padding:6px 3px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.08);border:1px solid #e0c4e8}
+  .stat-box .label{font-size:9px;color:#888}
+  .stat-box .value{font-size:15px;font-weight:700;color:#c0392b;margin-top:2px}
+  .stat-box.live .value{color:#27ae60}
+  .timer-banner{background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;padding:10px;border-radius:12px;text-align:center;margin-bottom:8px;font-weight:700;font-size:14px;animation:pl 1s infinite}
+  .timer-banner.safe{background:linear-gradient(135deg,#27ae60,#1e8449);animation:none}
+  @keyframes pl{0%,100%{opacity:1}50%{opacity:.7}}
+  .top-row{display:grid;grid-template-columns:80px 1fr;gap:8px;margin-bottom:8px}
+  .called-box{background:linear-gradient(135deg,#f39c12,#e67e22);color:#fff;border-radius:14px;padding:10px 5px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100px;box-shadow:0 4px 12px rgba(243,156,18,.4)}
+  .called-box .label{font-size:9px;opacity:.9;margin-bottom:4px}
+  .called-box .value{font-size:36px;font-weight:700;line-height:1}
+  .mycard-box{background:#fff;border-radius:14px;padding:8px;box-shadow:0 2px 8px rgba(0,0,0,.06);border:1px solid #e0c4e8}
+  .mycard-box .title{font-size:11px;font-weight:700;color:#8e44ad;text-align:center;margin-bottom:5px}
+  .bingo-header{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:3px}
+  .bingo-header div{text-align:center;font-weight:700;font-size:12px;padding:3px 0;border-radius:6px;color:#fff}
+  .b-red{background:#e74c3c}.b-green{background:#27ae60}.b-yellow{background:#f39c12}.b-blue{background:#3498db}.b-purple{background:#9b59b6}
+  .mini-card-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
+  .mini-card-cell{aspect-ratio:1;background:#f9f4fc;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#555;border:1px solid #e0c4e8}
+  .mini-card-cell.called{background:#27ae60;color:#fff;border-color:#1e8449}
+  .mini-card-cell.free{background:#f1c40f;color:#fff}
+  .board-card{background:#fff;border-radius:14px;padding:8px;margin-bottom:8px;box-shadow:0 2px 8px rgba(0,0,0,.06);border:1px solid #e0c4e8}
+  .board-title{font-size:12px;font-weight:700;color:#8e44ad;text-align:center;margin-bottom:6px}
+  .board-scroll{max-height:220px;overflow-y:auto;border-radius:8px;padding:4px;background:#faf5fc}
+  .board-scroll::-webkit-scrollbar{width:4px}
+  .board-scroll::-webkit-scrollbar-thumb{background:#c39bd3;border-radius:2px}
+  .num-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:3px}
+  .num-cell{aspect-ratio:1;background:#f0e6f6;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#555;border:1px solid #e0c4e8}
+  .num-cell.called{background:#f39c12;color:#fff}
+  .cards-scroll{max-height:180px;overflow-y:auto;padding:4px;background:#faf5fc;border-radius:8px}
+  .cards-scroll::-webkit-scrollbar{width:4px}
+  .cards-scroll::-webkit-scrollbar-thumb{background:#c39bd3;border-radius:2px}
+  .card-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+  .card-btn{aspect-ratio:1;background:linear-gradient(135deg,#27ae60,#1e8449);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 0 #145a32}
+  .card-btn.taken{background:#ccc;color:#888;box-shadow:none;cursor:not-allowed}
+  .full-card-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:10px}
+  .full-card-cell{aspect-ratio:1;background:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#333;border:2px solid #e0c4e8}
+  .full-card-cell.called{background:#27ae60;color:#fff;border-color:#1e8449}
+  .full-card-cell.free{background:#f1c40f;color:#fff}
+  .btn{width:100%;padding:14px;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-top:8px}
+  .btn-bingo{background:linear-gradient(135deg,#f39c12,#e67e22);color:#fff;box-shadow:0 4px 0 #b9770e}
+  .admin-panel{background:linear-gradient(135deg,#2c3e50,#1a252f);color:#ecf0f1;border-radius:14px;padding:10px;margin-top:10px;border:2px solid #e74c3c}
+  .admin-panel .title{text-align:center;font-weight:700;color:#f39c12;margin-bottom:8px;font-size:13px}
+  .admin-section{background:rgba(255,255,255,.05);border-radius:8px;padding:6px;margin-bottom:6px}
+  .admin-section-title{font-size:10px;color:#f39c12;margin-bottom:4px;font-weight:700}
+  .admin-btn{background:linear-gradient(135deg,#34495e,#2c3e50);color:#ecf0f1;border:1px solid #4a6580;border-radius:6px;padding:6px;margin:2px 0;font-size:10px;cursor:pointer;width:100%}
+  .admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+  .hidden{display:none!important}
+  .loading{text-align:center;padding:40px;color:#8e44ad;font-size:14px}
+  .winner-section{background:linear-gradient(135deg,#f39c12,#e67e22,#f39c12);background-size:200% 200%;animation:wg 2s infinite;color:#fff;padding:20px;border-radius:18px;text-align:center;margin:10px 0;box-shadow:0 8px 25px rgba(243,156,18,.6);border:3px solid #fff}
+  @keyframes wg{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+  .winner-section .crown{font-size:48px}
+  .winner-section .congrats{font-size:22px;font-weight:700;margin:8px 0}
+  .winner-section .winner-name{background:rgba(255,255,255,.25);padding:8px 16px;border-radius:20px;font-size:18px;font-weight:700;display:inline-block}
+  .winner-section .card-number{background:rgba(255,255,255,.3);padding:4px 12px;border-radius:12px;font-size:16px;font-weight:700;display:inline-block;margin-top:6px}
+  .winner-section .prize{background:rgba(255,255,255,.4);padding:6px 14px;border-radius:14px;font-size:18px;font-weight:700;display:inline-block;margin-top:8px}
+  .winner-section .blessing{font-size:13px;margin-top:12px;padding:8px;background:rgba(255,255,255,.15);border-radius:10px;font-style:italic}
+  .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.9);color:#fff;padding:12px 20px;border-radius:20px;font-size:12px;z-index:9999;max-width:90%;text-align:center}
+  .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px}
+  .modal{background:#fff;border-radius:16px;padding:20px;max-width:400px;width:100%;max-height:85vh;overflow-y:auto}
+  .modal h3{color:#8e44ad;margin-bottom:12px;font-size:16px;text-align:center}
+  .modal input,.modal textarea,.modal select{width:100%;padding:10px;border:2px solid #e0c4e8;border-radius:8px;margin-bottom:10px;font-size:14px}
+  .modal button{width:100%;padding:12px;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;margin-top:5px}
+  .modal .btn-ok{background:#27ae60;color:#fff}
+  .modal .btn-cancel{background:#ccc;color:#333}
+  .tabs{display:flex;gap:4px;margin-bottom:8px}
+  .tab{flex:1;padding:8px;background:#fff;border:2px solid #e0c4e8;border-radius:8px;font-size:11px;font-weight:700;color:#8e44ad;cursor:pointer;text-align:center}
+  .tab.active{background:#8e44ad;color:#fff}
+  .tab-content{display:none}
+  .tab-content.active{display:block}
+  .confetti-container{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9998;overflow:hidden}
+  .confetti{position:absolute;width:10px;height:10px;animation:cf 3s linear infinite}
+  @keyframes cf{0%{transform:translateY(-100vh) rotate(0)}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}
 </style>
 </head>
 <body>
-
 <div class="confetti-container" id="confetti-container"></div>
 <div id="modal-root"></div>
 
@@ -110,7 +107,6 @@
 <div id="loading" class="loading">🙏 እባክህ ትንሽ ታገስ...</div>
 
 <div id="main" class="hidden">
-
   <div class="balance-bar">
     <div>
       <div class="label">💰 የአሁን ባላንስ</div>
@@ -137,10 +133,10 @@
     <div class="crown">👑</div>
     <div class="congrats">🎊 ከልብ እንኳን ደስ አለህ/ሽ! 🎊</div>
     <div class="winner-name" id="winner-name">👤</div>
-    <div style="margin-top:8px; font-size:14px;">🎫 ያሸነፈበት ካርድ:</div>
+    <div style="margin-top:8px;font-size:14px">🎫 ያሸነፈበት ካርድ:</div>
     <div class="card-number" id="winner-card">#?</div>
     <div class="prize">💰 <span id="winner-prize">0</span> ብር</div>
-    <div class="info-line" style="font-size:12px; margin-top:10px; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.5);"><span id="winner-stats">🎯 -</span></div>
+    <div style="font-size:12px;margin-top:10px;padding-top:10px;border-top:1px dashed rgba(255,255,255,.5)"><span id="winner-stats">🎯 -</span></div>
     <div class="blessing">💚 ስለ ተሳትፎህ/ሽ ከልብ እናመሰግናለን!</div>
   </div>
 
@@ -164,9 +160,9 @@
   </div>
 
   <div class="tabs">
-    <div class="tab active" onclick="switchTab('join')">🎫 ካርድ</div>
-    <div class="tab" onclick="switchTab('board')">📊 ሰንጠረዥ</div>
-    <div class="tab" onclick="switchTab('history')">📜 ታሪክ</div>
+    <div class="tab active" onclick="switchTab(event,'join')">🎫 ካርድ</div>
+    <div class="tab" onclick="switchTab(event,'board')">🏆 ሰንጠረዥ</div>
+    <div class="tab" onclick="switchTab(event,'history')">📜 ታሪክ</div>
   </div>
 
   <div id="tab-join" class="tab-content active">
@@ -188,51 +184,42 @@
   <div id="tab-board" class="tab-content">
     <div class="board-card">
       <div class="board-title">🏆 የአሸናፊዎች ሰንጠረዥ</div>
-      <div id="leaderboard-content" style="font-size:13px;"></div>
+      <div id="leaderboard-content" style="font-size:13px"></div>
     </div>
   </div>
 
   <div id="tab-history" class="tab-content">
     <div class="board-card">
       <div class="board-title">📜 የቅርብ ጊዜ ጨዋታዎች</div>
-      <div id="history-content" style="font-size:12px;"></div>
+      <div id="history-content" style="font-size:12px"></div>
     </div>
   </div>
 
   <div id="admin-panel" class="admin-panel hidden">
     <div class="title">🔐 🙏 ውድ አስተዳዳሪ - የግል ማዕከል</div>
-    
     <div class="admin-section">
       <div class="admin-section-title">🎮 የጨዋታ ቁጥጥር</div>
       <div class="admin-grid">
-        <button class="admin-btn" onclick="admCreateRoom()" style="background:linear-gradient(135deg,#e67e22,#d35400);grid-column:1/-1;">➕ አዲስ ክፍል ክፈት</button>
+        <button class="admin-btn" onclick="admCreateRoom()" style="background:linear-gradient(135deg,#e67e22,#d35400);grid-column:1/-1">➕ አዲስ ክፍል ክፈት</button>
         <button class="admin-btn" onclick="admStartGame()">▶️ ጨዋታ ጀምር</button>
         <button class="admin-btn" onclick="admTogglePause()">⏸️ አቆም/ቀጥል</button>
         <button class="admin-btn" onclick="admCallNumber()">🎯 ቁጥር ጥራ</button>
         <button class="admin-btn" onclick="admReset()">🔄 አስጀምር</button>
       </div>
     </div>
-
     <div class="admin-section">
       <div class="admin-section-title">👥 የተጫዋቾች ቁጥጥር</div>
       <div class="admin-grid">
         <button class="admin-btn" onclick="admViewAllCards()">🎴 ካርዶች</button>
         <button class="admin-btn" onclick="admAddBalance()">💰 ባላንስ ጨምር</button>
+        <button class="admin-btn" onclick="admSetBalance()">💵 ባላንስ ቀይር</button>
         <button class="admin-btn" onclick="admBan()">🚫 አግድ</button>
         <button class="admin-btn" onclick="admUnban()">🔓 አንሳ</button>
         <button class="admin-btn" onclick="admSendDM()">📩 DM</button>
         <button class="admin-btn" onclick="admRemoveCard()">❌ ካርድ አስወግድ</button>
-      </div>
-    </div>
-
-    <div class="admin-section">
-      <div class="admin-section-title">🏆 ውጤት</div>
-      <div class="admin-grid">
         <button class="admin-btn" onclick="admForceWin()">🏆 አሸናፊ ምረጥ</button>
-        <button class="admin-btn" onclick="admSetName()">✏️ ስም ቀይር</button>
       </div>
     </div>
-
     <div class="admin-section">
       <div class="admin-section-title">💰 ቅንብሮች</div>
       <div class="admin-grid">
@@ -245,21 +232,18 @@
         <button class="admin-btn" onclick="admSetPattern()">🏆 ዓይነት</button>
         <button class="admin-btn" onclick="admSetJackpotPct()">🎰 ጃክፖት%</button>
         <button class="admin-btn" onclick="admSetMinWithdraw()">💸 ማውጣት ገደብ</button>
-        <button class="admin-btn" onclick="admSetTheme()">🎨 ገጽታ</button>
+        <button class="admin-btn" onclick="admSetName()">✏️ ስም</button>
       </div>
     </div>
-
     <div class="admin-section">
-      <div class="admin-section-title">📊 ስታቲስቲክስ</div>
+      <div class="admin-section-title">📊 ተጨማሪ</div>
       <div class="admin-grid">
         <button class="admin-btn" onclick="admStats()">📈 ስታቲስቲክስ</button>
         <button class="admin-btn" onclick="admBroadcast()">📢 ማስታወቂያ</button>
         <button class="admin-btn" onclick="admPendingWithdrawals()">💸 ማውጣት</button>
-        <button class="admin-btn" onclick="admAddScheduled()">⏰ ጊዜ ጨምር</button>
       </div>
     </div>
   </div>
-
 </div>
 
 <script>
@@ -269,7 +253,6 @@ const USER_ID = tg.initDataUnsafe?.user?.id || 0;
 const USER_NAME = tg.initDataUnsafe?.user?.first_name || 'ተጫዋች';
 let IS_ADMIN = false, ROOM_ID = 1, MY_CARD_NUM = null, HAS_SELECTED = false;
 let LAST_CALLED = null, WINNER_SHOWN = false, MY_BALANCE = 0, PRICE_INT = 50, PAY_ACCOUNT = '';
-let MY_CARDS = [];
 
 async function api(path, method='GET', body=null) {
   const o = { method, headers: {'Content-Type':'application/json'} };
@@ -309,23 +292,23 @@ function prompt2(title, fields, cb) {
     {text:'↩️ ተመለስ', class:'btn-cancel', onclick:()=>{}}
   ]);
 }
-function switchTab(name) {
+function switchTab(ev, name) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
-  event.target.classList.add('active');
+  ev.target.classList.add('active');
   document.getElementById(`tab-${name}`).classList.add('active');
   if (name === 'board') loadLeaderboard();
   if (name === 'history') loadHistory();
 }
 function showPaymentInfo() {
   showModal('🙏 ባላንስ ለመጨመር',
-    `<div style="text-align:center;">
-      <p style="margin-bottom:10px;color:#666;">🙏 ውድ ተጫዋች፣ በትህትና እንጠይቅሃለን</p>
+    `<div style="text-align:center">
+      <p style="margin-bottom:10px;color:#666">🙏 ውድ ተጫዋች፣ በትህትና እንጠይቅሃለን</p>
       <p>💰 ባላንስ: <b>${MY_BALANCE} ብር</b></p>
       <p>💵 የሚያስፈልግ: <b>${PRICE_INT} ብር</b></p>
-      <p style="margin-top:10px;">🏦 አካውንት:</p>
-      <p style="background:#f0e6f6;padding:10px;border-radius:8px;font-weight:bold;word-break:break-all;">${PAY_ACCOUNT}</p>
-      <p style="font-size:12px;color:#666;margin-top:10px;line-height:1.6;">📸 ስክሪንሾት ወደ ቦቱ ላክ<br>✅ አስተዳዳሪው ባጸደቀ ቅጽበት ባላንስህ ይጨመራል<br><br>💚 ስለ ትዕግስትህ እናመሰግናለን!</p>
+      <p style="margin-top:10px">🏦 አካውንት:</p>
+      <p style="background:#f0e6f6;padding:10px;border-radius:8px;font-weight:700;word-break:break-all">${PAY_ACCOUNT}</p>
+      <p style="font-size:12px;color:#666;margin-top:10px;line-height:1.6">📸 ስክሪንሾት ወደ ቦቱ ላክ<br>✅ አስተዳዳሪው ባጸደቀ ቅጽበት ባላንስህ ይጨመራል<br><br>💚 ስለ ትዕግስትህ እናመሰግናለን!</p>
     </div>`, [{text:'🙏 ገባኝ', class:'btn-ok', onclick:()=>{}}]);
 }
 function showDailyBonus() {
@@ -393,21 +376,19 @@ async function selectCard(num) {
   if (!r.ok) {
     if (r.need_payment) {
       showModal('🙏 በትህትና እናሳውቅ',
-        `<div style="text-align:center;">
+        `<div style="text-align:center">
           <p>💚 ውድ ተጫዋች፣ በቂ ባላንስ የለህም።</p>
-          <hr style="margin:10px 0;">
+          <hr style="margin:10px 0">
           <p>💰 ያለህ: <b>${r.balance} ብር</b></p>
           <p>💵 የሚያስፈልግ: <b>${r.price} ብር</b></p>
-          <hr style="margin:10px 0;">
-          <p style="background:#f0e6f6;padding:10px;border-radius:8px;font-weight:bold;">${r.account}</p>
-          <p style="font-size:12px;color:#e74c3c;margin-top:10px;">🙏 እባክህ ${r.price} ብር ላክና ስክሪንሾት ወደ ቦቱ ላክ።</p>
+          <hr style="margin:10px 0">
+          <p style="background:#f0e6f6;padding:10px;border-radius:8px;font-weight:700">${r.account}</p>
+          <p style="font-size:12px;color:#e74c3c;margin-top:10px">🙏 እባክህ ${r.price} ብር ላክና ስክሪንሾት ወደ ቦቱ ላክ።</p>
         </div>`, [{text:'🙏 ገባኝ', class:'btn-ok', onclick:()=>{}}]);
     } else tg.showAlert(r.msg);
     return;
   }
-  MY_CARD_NUM = num;
-  HAS_SELECTED = true;
-  MY_BALANCE = r.new_balance;
+  MY_CARD_NUM = num; HAS_SELECTED = true; MY_BALANCE = r.new_balance;
   document.getElementById('balance-display').innerText = MY_BALANCE + ' ብር';
   tg.showAlert(`🌟 ካርድ #${num} ተመርጧል!\n💰 ተቀነሰ: ${PRICE_INT} ብር\n💵 ቀሪ: ${MY_BALANCE} ብር\n\n🙏 እናመሰግናለን!`);
   document.getElementById('join-section').classList.add('hidden');
@@ -467,21 +448,20 @@ async function loadRoom() {
   } else document.getElementById('join-section').classList.add('hidden');
 
   if (d.winners && d.winners.length > 0 && d.winner_name) {
-    showWinnerBanner({ winner: d.winner_name, winner_card: d.winner_card, prize: d.prize, called_count: d.called_count });
+    showWinnerBanner({ winner: d.winner_name, winner_card: d.winner_card, prize: d.winner_prize, called_count: d.called_count });
   }
   return d;
 }
 async function updateMyCards() {
   const r = await api('/api/mycard', 'POST', { user_id: USER_ID, room_id: ROOM_ID });
   if (r.cards && r.cards.length > 0) {
-    MY_CARDS = r.cards;
     HAS_SELECTED = true;
     const el = document.getElementById('my-full-cards'); el.innerHTML = '';
     r.cards.forEach((c, idx) => {
-      const title = document.createElement('div');
-      title.style.cssText = 'text-align:center;font-size:12px;font-weight:bold;color:#8e44ad;margin:6px 0;';
-      title.innerText = `🎫 ካርድ #${r.card_nums[idx]}`;
-      el.appendChild(title);
+      const t = document.createElement('div');
+      t.style.cssText = 'text-align:center;font-size:12px;font-weight:700;color:#8e44ad;margin:6px 0;';
+      t.innerText = `🎫 ካርድ #${r.card_nums[idx]}`;
+      el.appendChild(t);
       el.appendChild(renderFullCard(c));
     });
     if (r.cards[0]) renderMiniCard(r.cards[0]);
@@ -498,24 +478,24 @@ document.getElementById('bingo-btn').onclick = async () => {
 };
 async function loadLeaderboard() {
   const r = await api('/api/leaderboard');
-  let html = '';
+  let h = '';
   if (r.leaders && r.leaders.length) {
     r.leaders.forEach((l, i) => {
-      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
-      html += `<div style="padding:6px 0;border-bottom:1px solid #eee;">${medal} <b>${l.name}</b> — ${l.wins} ድሎች</div>`;
+      const m = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
+      h += `<div style="padding:6px 0;border-bottom:1px solid #eee">${m} <b>${l.name}</b> — ${l.wins} ድሎች</div>`;
     });
-  } else html = '<p style="text-align:center;">🙏 እስካሁን የለም</p>';
-  document.getElementById('leaderboard-content').innerHTML = html;
+  } else h = '<p style="text-align:center">🙏 እስካሁን የለም</p>';
+  document.getElementById('leaderboard-content').innerHTML = h;
 }
 async function loadHistory() {
   const r = await api('/api/history');
-  let html = '';
+  let h = '';
   if (r.history && r.history.length) {
-    r.history.forEach(h => {
-      html += `<div style="padding:5px 0;border-bottom:1px solid #eee;">🏆 <b>${h.winner}</b> (#${h.card}) — ${h.prize} ብር<br><small style="color:#888;">${h.date}</span></div>`;
+    r.history.forEach(x => {
+      h += `<div style="padding:5px 0;border-bottom:1px solid #eee">🏆 <b>${x.winner}</b> (#${x.card}) — ${x.prize} ብር<br><small style="color:#888">${x.date}</small></div>`;
     });
-  } else html = '<p style="text-align:center;">🙏 እስካሁን የለም</p>';
-  document.getElementById('history-content').innerHTML = html;
+  } else h = '<p style="text-align:center">🙏 እስካሁን የለም</p>';
+  document.getElementById('history-content').innerHTML = h;
 }
 
 // ADMIN
@@ -525,6 +505,7 @@ async function admCreateRoom() {
     if (isNaN(cid)) { showToast('🙏 ትክክለኛ ID አስገባ'); return; }
     const r = await api('/api/admin/create_room', 'POST', { user_id: USER_ID, chat_id: cid });
     if (r.ok) { showToast(`✅ ክፍል ${r.room_id} ተከፍቷል!`, 4000); setTimeout(()=>location.reload(), 1500); }
+    else showToast('🙏 '+(r.msg||'ስህተት'));
   });
 }
 async function admStartGame() { const r = await api('/api/admin/start_game','POST',{user_id:USER_ID,room_id:ROOM_ID}); showToast(r.ok?'▶️ ተጀምሯል':'🙏 '+(r.msg||'ስህተት')); }
@@ -539,8 +520,8 @@ async function admCallNumber() {
 async function admReset() { if (!confirm('🙏 ጨዋታውን ማስጀመር?')) return; await api('/api/admin/reset','POST',{user_id:USER_ID,room_id:ROOM_ID}); setTimeout(()=>location.reload(),500); }
 async function admViewAllCards() {
   const r = await api('/api/admin/allcards','POST',{user_id:USER_ID,room_id:ROOM_ID});
-  let h = ''; r.players.forEach(p => h += `<div style="border-bottom:1px solid #eee;padding:6px 0;font-size:12px;">👤 ${p.name} | 🎫 #${p.card_nums.join(',')} | 💰 ${p.balance}</div>`);
-  if (!r.players.length) h = '<p style="text-align:center;">🙏 የለም</p>';
+  let h = ''; (r.players||[]).forEach(p => h += `<div style="border-bottom:1px solid #eee;padding:6px 0;font-size:12px">👤 ${p.name} | 🎫 #${p.card_nums.join(',')} | 💰 ${p.balance}</div>`);
+  if (!h) h = '<p style="text-align:center">🙏 የለም</p>';
   showModal('🎴 ካርዶች', h, [{text:'🙏 ዝጋ', class:'btn-ok', onclick:()=>{}}]);
 }
 async function admAddBalance() {
@@ -549,6 +530,63 @@ async function admAddBalance() {
     if (r.ok) showToast(`✅ ${r.balance} ብር`);
   });
 }
-async function admBan() { prompt2('🚫 አግድ',[{id:'uid',type:'number'}],async v=>{ await api('/api/admin/ban','POST',{user_id:USER_ID,target_id:parseInt(v.uid)}); showToast('🚫 ተከልክሏል'); }); }
-async function admUnban() { prompt2('🔓 አንሳ',[{id:'uid',type:'number'}],async v=>{ await api('/api/admin/unban','POST',{user_id:USER_ID,target_id:parseInt(v.uid)}); showToast('🔓 ተላቋል'); }); }
-async function admSendDM() { prompt2
+async function admSetBalance() {
+  prompt2('💵 ባላንስ ቀይር',[{id:'uid',type:'number',placeholder:'User ID'},{id:'amt',type:'number',placeholder:'አዲስ'}],async v=>{
+    const r = await api('/api/admin/set_balance','POST',{user_id:USER_ID,target_id:parseInt(v.uid),amount:parseInt(v.amt)});
+    if (r.ok) showToast(`✅ ${r.balance} ብር`);
+  });
+}
+async function admBan() { prompt2('🚫 አግድ',[{id:'uid',type:'number'}],async v=>{ await api('/api/admin/ban','POST',{user_id:USER_ID,target_id:parseInt(v.uid)}); showToast('🚫'); }); }
+async function admUnban() { prompt2('🔓 አንሳ',[{id:'uid',type:'number'}],async v=>{ await api('/api/admin/unban','POST',{user_id:USER_ID,target_id:parseInt(v.uid)}); showToast('🔓'); }); }
+async function admSendDM() { prompt2('📩 DM',[{id:'uid',type:'number',placeholder:'User ID'},{id:'m',type:'textarea',placeholder:'መልእክት'}],async v=>{ const r = await api('/api/admin/send_dm','POST',{user_id:USER_ID,target_id:parseInt(v.uid),message:v.m}); showToast(r.ok?'✅':'🙏'); }); }
+async function admRemoveCard() { prompt2('❌ ካርድ',[{id:'cn',type:'number',placeholder:'ካርድ ቁጥር'}],async v=>{ await api('/api/admin/remove_card','POST',{user_id:USER_ID,room_id:ROOM_ID,card_num:parseInt(v.cn)}); showToast('✅'); loadRoom(); }); }
+async function admForceWin() { prompt2('🏆 አሸናፊ',[{id:'uid',type:'number',placeholder:'User ID'}],async v=>{ const r = await api('/api/admin/force_win','POST',{user_id:USER_ID,room_id:ROOM_ID,target_user_id:parseInt(v.uid)}); if (r.ok) { showToast('🏆'); WINNER_SHOWN=false; loadRoom(); } }); }
+async function admSetPrice() { prompt2('💵 ዋጋ',[{id:'v',type:'text',value:'50 ብር'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'price',value:x.v}); showToast('✅'); loadUserInfo(); }); }
+async function admSetAccount() { prompt2('🏦 አካውንት',[{id:'v',type:'text',value:'CBE 1000123456789'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'account',value:x.v}); showToast('✅'); loadUserInfo(); }); }
+async function admSetInterval() { prompt2('⏱️ ፍጥነት',[{id:'v',type:'select',value:'5',options:[{v:'3',t:'3s'},{v:'5',t:'5s'},{v:'10',t:'10s'},{v:'15',t:'15s'}]}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'call_interval',value:x.v}); showToast('✅'); }); }
+async function admSetCommission() { prompt2('💹 ኮሚሽን %',[{id:'v',type:'number',placeholder:'0-50'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'commission',value:x.v}); showToast('✅'); }); }
+async function admSetDailyBonus() { prompt2('🎁 ስጦታ',[{id:'v',type:'number',placeholder:'ብር'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'daily_bonus',value:x.v}); showToast('✅'); }); }
+async function admSetMaxCards() { prompt2('🎫 ካርድ ገደብ',[{id:'v',type:'select',value:'1',options:[{v:'1',t:'1'},{v:'2',t:'2'},{v:'3',t:'3'},{v:'5',t:'5'}]}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'max_cards_per_player',value:x.v}); showToast('✅'); }); }
+async function admSetPattern() { prompt2('🏆 ዓይነት',[{id:'v',type:'select',value:'single',options:[{v:'single',t:'አንድ መስመር'},{v:'fullhouse',t:'ሙሉ ካርድ'},{v:'corners',t:'አራት ማዕዘን'}]}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'win_pattern',value:x.v}); showToast('✅'); }); }
+async function admSetJackpotPct() { prompt2('🎰 ጃክፖት %',[{id:'v',type:'number',placeholder:'0-30'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'jackpot_percent',value:x.v}); showToast('✅'); }); }
+async function admSetMinWithdraw() { prompt2('💸 ማውጣት ገደብ',[{id:'v',type:'number',placeholder:'ብር'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'min_withdraw',value:x.v}); showToast('✅'); }); }
+async function admSetName() { prompt2('✏️ ስም',[{id:'v',type:'text',value:'ዘና ቢንጎ ከድጎ'}],async x=>{ await api('/api/admin/set_setting','POST',{user_id:USER_ID,key:'game_name',value:x.v}); showToast('✅'); loadRoom(); }); }
+async function admStats() {
+  const r = await api('/api/admin/stats','POST',{user_id:USER_ID});
+  let h = `<div style="font-size:13px">
+    <p>👥 ተጫዋቾች: <b>${r.total_users}</b></p>
+    <p>💰 ባላንስ: <b>${r.total_balance} ብር</b></p>
+    <p>🎮 ጨዋታዎች: <b>${r.total_games}</b></p>
+    <p>🚫 የተከለከሉ: <b>${r.banned}</b></p>
+    <p>🎰 ጃክፖት: <b>${r.jackpot} ብር</b></p>
+    <hr style="margin:8px 0"><p style="font-weight:700">📜 አሸናፊዎች:</p>`;
+  (r.history||[]).forEach(x => h += `<div style="padding:3px 0;font-size:11px">🏆 ${x.winner} (#${x.card}) — ${x.prize}</div>`);
+  h += '</div>';
+  showModal('📊 ስታቲስቲክስ', h, [{text:'🙏 ዝጋ', class:'btn-ok', onclick:()=>{}}]);
+}
+async function admBroadcast() { prompt2('📢 ማስታወቂያ',[{id:'m',type:'textarea'}],async x=>{ const r = await api('/api/admin/broadcast','POST',{user_id:USER_ID,message:x.m}); if (r.ok) showToast(`✅ ለ ${r.count}`); }); }
+async function admPendingWithdrawals() {
+  const r = await api('/api/admin/pending_withdrawals','POST',{user_id:USER_ID});
+  let h = '';
+  (r.pending||[]).forEach(p => {
+    h += `<div style="border:1px solid #eee;border-radius:8px;padding:8px;margin:6px 0;font-size:12px">
+      <p>🆔 ${p.user_id} | 💰 ${p.amount} ብር</p>
+      <p>🏦 ${p.note}</p>
+      <button onclick="approveW(${p.id},'approve')" style="background:#27ae60;color:#fff;border:none;padding:5px 10px;border-radius:6px;margin:3px">✅ አጽድቅ</button>
+      <button onclick="approveW(${p.id},'reject')" style="background:#e74c3c;color:#fff;border:none;padding:5px 10px;border-radius:6px;margin:3px">❌ ውድቅ</button>
+    </div>`;
+  });
+  if (!h) h = '<p style="text-align:center">🙏 ጥያቄ የለም</p>';
+  showModal('💸 የማውጣት ጥያቄዎች', h, [{text:'🙏 ዝጋ', class:'btn-ok', onclick:()=>{}}]);
+}
+async function approveW(tid, act) { await api('/api/admin/approve_withdraw','POST',{user_id:USER_ID,transaction_id:tid,action:act}); showToast(act==='approve'?'✅':'❌'); document.getElementById('modal-root').innerHTML=''; }
+
+async function poll() {
+  await loadRoom();
+  await updateMyCards();
+}
+loadUserInfo().then(() => loadRoom());
+setInterval(poll, 3000);
+</script>
+</body>
+</html>
