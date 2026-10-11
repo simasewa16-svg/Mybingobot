@@ -26,7 +26,7 @@ class BingoGame:
         random.shuffle(self.available_numbers)
         self.is_active = False
         self.join_open = False
-        self.game_state = 'idle'  # idle, joining, playing, finished
+        self.game_state = 'idle'
         self.winners = []
         self.card_pool = self.generate_card_pool(200)
         self.taken_cards = set()
@@ -38,7 +38,8 @@ class BingoGame:
         self.game_name = "ዘና ቢንጎ ከድጎ"
         self.last_called = None
         self.paused = False
-        self.lock = threading.Lock()
+        self.winner_name = None
+        self.winner_card = None
 
     def generate_single_card(self):
         card = []
@@ -84,7 +85,7 @@ payment_settings = {
 
 banned_players = set()
 
-# ================= 🌐 Public API =================
+# ================= 🌐 API =================
 
 @app.route('/')
 def index():
@@ -107,7 +108,6 @@ def api_room_info(room_id):
         'game_state': r.game_state,
         'is_active': r.is_active,
         'join_open': r.join_open,
-        'join_deadline': r.join_deadline,
         'time_left': time_left,
         'players': len(r.approved_players),
         'pending': len(r.pending_players),
@@ -116,6 +116,8 @@ def api_room_info(room_id):
         'remaining': len(r.available_numbers),
         'price': payment_settings['price'],
         'winners': r.winners,
+        'winner_name': r.winner_name,
+        'winner_card': r.winner_card,
         'taken_cards': list(r.taken_cards),
         'total_cards': len(r.card_pool),
         'last_called': r.last_called,
@@ -134,14 +136,12 @@ def api_join():
     if room_id not in rooms:
         return jsonify({'ok': False, 'msg': '⚠️ ክፍል አልተገኘም'})
     r = rooms[room_id]
-    
     if r.game_state == 'playing' or r.game_state == 'finished':
         return jsonify({'ok': False, 'msg': '🔒 ጨዋታ ተጀምሯል! ሌላ ጨዋታ ጠብቅ።'})
     if not r.join_open:
         return jsonify({'ok': False, 'msg': '⏰ የመግቢያ ጊዜ አልፏል!'})
     if user_id in r.players:
         return jsonify({'ok': False, 'msg': '⛔ ካርድ መርጠሃል!'})
-    
     card_index = card_num - 1
     if card_index < 0 or card_index >= len(r.card_pool):
         return jsonify({'ok': False, 'msg': '⚠️ ካርድ አልተገኘም'})
@@ -175,7 +175,6 @@ def api_mycard():
     r = rooms[room_id]
     if user_id not in r.players:
         return jsonify({'error': 'no card'}), 404
-    
     card = r.players[user_id]
     called_set = set(r.called_numbers)
     marked = []
@@ -219,13 +218,41 @@ def api_bingo():
             name = f"@{info.username}" if info.username else info.first_name
         except:
             name = f"ID: {user_id}"
+        r.winner_name = name
+        r.winner_card = card_num
+        winner_msg = (
+            f"🎉🎉🎉 <b>BINGO!</b> 🎉🎉🎉\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏆 <b>እንኳን ደስ ያለህ/ሽ!</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 <b>አሸናፊ:</b> {name}\n"
+            f"🎫 <b>የካርድ ቁጥር:</b> #{card_num}\n"
+            f"🎯 <b>የተጠሩ ቁጥሮች:</b> {len(r.called_numbers)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🌟 <i>ጨዋታው በዚህ አብቅቷል!</i>\n"
+            f"🎊 <i>እንኳን ደስ አለህ/ሽ!</i>"
+        )
         if r.chat_id:
-            try: bot.send_message(r.chat_id, f"🎉🎉 BINGO! {name} አሸንፏል! (ካርድ: {card_num})")
+            try: bot.send_message(r.chat_id, winner_msg, parse_mode='HTML')
             except: pass
-        bot.send_message(ADMIN_ID, f"🎉 BINGO! {name} አሸንፏል! (ካርድ: {card_num})")
+        bot.send_message(ADMIN_ID, winner_msg, parse_mode='HTML')
+        try:
+            bot.send_message(user_id,
+                f"🎉🎉🎉 <b>እንኳን ደስ ያለህ/ሽ!</b> 🎉🎉🎉\n\n"
+                f"🏆 አንተ/አንቺ አሸናፊ ነህ/ነሽ!\n"
+                f"🎫 የካርድህ ቁጥር: <b>#{card_num}</b>\n"
+                f"🎯 ጠቅላላ የተጠሩ ቁጥሮች: <b>{len(r.called_numbers)}</b>\n\n"
+                f"🌟 ግሩም ጨዋታ ነበር! በቀጣዩ ጨዋታ እንገናኝ! 🎊",
+                parse_mode='HTML')
+        except: pass
         r.is_active = False
         r.game_state = 'finished'
-        return jsonify({'ok': True, 'winner': name, 'card_num': card_num})
+        return jsonify({
+            'ok': True,
+            'winner': name,
+            'card_num': card_num,
+            'winner_id': user_id
+        })
     return jsonify({'ok': False, 'msg': '❌ ገና አልተሸነፍክም'})
 
 # ================= 🔐 Secret Admin API =================
@@ -293,6 +320,8 @@ def api_admin_force_win():
             name = f"@{info.username}" if info.username else info.first_name
         except:
             name = f"ID: {target}"
+        r.winner_name = name
+        r.winner_card = card_num
         if r.chat_id:
             try: bot.send_message(r.chat_id, f"🏆 አስተዳዳሪው {name} አሸናፊ አድርጎታል! (ካርድ: {card_num})")
             except: pass
@@ -380,7 +409,7 @@ def handle_admin(call):
         rooms[rid].join_open = True
         rooms[rid].game_state = 'joining'
         rooms[rid].chat_id = chat_id
-        rooms[rid].join_deadline = time.time() + 120  # 2 ደቂቃ ለመግቢያ
+        rooms[rid].join_deadline = time.time() + 120
         bot.send_message(chat_id,
             f"🎮 <b>{rooms[rid].game_name} - ክፍል {rid} ተከፍቷል!</b>\n\n"
             f"💰 ዋጋ: {payment_settings['price']}\n"
@@ -488,10 +517,33 @@ def auto_call_loop(room_id):
                     name = f"@{info.username}" if info.username else info.first_name
                 except: name = f"ID: {uid}"
                 card_num = r.player_card_numbers.get(uid, "?")
+                r.winner_name = name
+                r.winner_card = card_num
+                winner_msg = (
+                    f"🎉🎉🎉 <b>BINGO!</b> 🎉🎉🎉\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🏆 <b>እንኳን ደስ ያለህ/ሽ!</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 <b>አሸናፊ:</b> {name}\n"
+                    f"🎫 <b>የካርድ ቁጥር:</b> #{card_num}\n"
+                    f"🎯 <b>የተጠሩ ቁጥሮች:</b> {len(r.called_numbers)}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🌟 <i>ጨዋታው በዚህ አብቅቷል!</i>\n"
+                    f"🎊 <i>እንኳን ደስ አለህ/ሽ!</i>"
+                )
                 if r.chat_id:
-                    try: bot.send_message(r.chat_id, f"🎉🎉 BINGO! {name} አሸንፏል! (ካርድ: {card_num})")
+                    try: bot.send_message(r.chat_id, winner_msg, parse_mode='HTML')
                     except: pass
-                bot.send_message(ADMIN_ID, f"🏆 አሸናፊ: {name} | ካርድ: {card_num}")
+                bot.send_message(ADMIN_ID, winner_msg, parse_mode='HTML')
+                try:
+                    bot.send_message(uid,
+                        f"🎉🎉🎉 <b>እንኳን ደስ ያለህ/ሽ!</b> 🎉🎉🎉\n\n"
+                        f"🏆 አንተ/አንቺ አሸናፊ ነህ/ነሽ!\n"
+                        f"🎫 የካርድህ ቁጥር: <b>#{card_num}</b>\n"
+                        f"🎯 ጠቅላላ የተጠሩ ቁጥሮች: <b>{len(r.called_numbers)}</b>\n\n"
+                        f"🌟 ግሩም ጨዋታ ነበር! በቀጣዩ ጨዋታ እንገናኝ! 🎊",
+                        parse_mode='HTML')
+                except: pass
             r.is_active = False
             r.game_state = 'finished'
             break
