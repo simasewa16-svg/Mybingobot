@@ -17,13 +17,13 @@ DB_PATH = 'bingo_data.db'
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 db_lock = Lock()
+pending_payments = {}
 
 # ================= 💾 DATABASE =================
 
 def init_db():
     with db_lock:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
+        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY, name TEXT, balance INTEGER DEFAULT 0,
             banned INTEGER DEFAULT 0, referral_code TEXT, referred_by INTEGER DEFAULT 0,
@@ -46,8 +46,7 @@ def init_db():
         }
         for k, v in defaults.items():
             c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
-        conn.commit()
-        conn.close()
+        conn.commit(); conn.close()
 
 def db_setting(key, default=''):
     with db_lock:
@@ -206,6 +205,7 @@ class BingoGame:
         self.winner_prize = 0
         self.winner_pattern = None
         self.winner_marked = []
+        self.winner_line_nums = []
 
     def gen_one(self):
         cols = [list(range(1, 19)), list(range(19, 37)), list(range(37, 55)),
@@ -224,21 +224,16 @@ class BingoGame:
         return pool
 
     def check_bingo(self, card, called):
-        """የተዘጋውን መስመር ስም ይመልሳል (ወይም None)"""
         cs = set(called)
-        # Rows
         for i, row in enumerate(card):
             if all(str(n) == "⭐" or n in cs for n in row):
                 return f"Row {i+1} (አግድም #{i+1})"
-        # Columns
         for c in range(5):
             if all(str(card[r][c]) == "⭐" or card[r][c] in cs for r in range(5)):
                 L = ["B", "I", "N", "G", "O"]
                 return f"Column {L[c]} (ቀጥ ያለ {L[c]})"
-        # Main diagonal
         if all(str(card[i][i]) == "⭐" or card[i][i] in cs for i in range(5)):
             return "Diagonal ↘ (ሰያፍ ↘)"
-        # Anti-diagonal
         if all(str(card[i][4-i]) == "⭐" or card[i][4-i] in cs for i in range(5)):
             return "Diagonal ↙ (ሰያፍ ↙)"
         pattern = db_setting('win_pattern', 'single')
@@ -251,32 +246,24 @@ class BingoGame:
                 return "Corners (አራት ማዕዘን)"
         return None
 
-    def get_marked_numbers(self, card, called):
-        """በካርዱ ላይ የተዘጉ ቁጥሮችን ይመልሳል"""
-        cs = set(called)
-        L = ["B", "I", "N", "G", "O"]
-        marked = []
+    def get_marked(self, card, called):
+        cs = set(called); L = ["B", "I", "N", "G", "O"]; marked = []
         for r in range(5):
             for c in range(5):
                 n = card[r][c]
-                if n == "⭐":
-                    marked.append("⭐ (ነፃ)")
-                elif n in cs:
-                    marked.append(f"{L[c]}-{n}")
+                if n == "⭐": marked.append("⭐")
+                elif n in cs: marked.append(f"{L[c]}-{n}")
         return marked
 
-    def get_marked_numbers_by_line(self, card, called, pattern):
-        """በተዘጋው መስመር ላይ ያሉ ቁጥሮችን ይመልሳል"""
-        cs = set(called)
-        L = ["B", "I", "N", "G", "O"]
-        nums = []
+    def get_line_nums(self, card, called, pattern):
+        cs = set(called); L = ["B", "I", "N", "G", "O"]; nums = []
         if pattern and pattern.startswith("Row"):
             i = int(pattern.split()[1]) - 1
             for c in range(5):
                 n = card[i][c]
                 nums.append("⭐" if n == "⭐" else f"{L[c]}-{n}")
         elif pattern and pattern.startswith("Column"):
-            c_idx = L.index(pattern.split()[2])
+            c_idx = L.index(pattern.split()[1])
             for r in range(5):
                 n = card[r][c_idx]
                 nums.append("⭐" if n == "⭐" else f"{L[c_idx]}-{n}")
@@ -316,12 +303,10 @@ def rate_ok(uid, sec=1):
     rate_limit[uid] = now; return True
 
 def process_winner(uid, r):
-    """የአሸናፊ ሂደት - ጽሑፍ ይፈጥራል"""
     name = get_name(uid)
     cnums = r.player_card_numbers.get(uid, [])
     cn = cnums[0] if cnums else "?"
-    r.winner_name = name
-    r.winner_card = cn
+    r.winner_name = name; r.winner_card = cn
     total = len(r.approved_players) * price_int()
     jp = db_jackpot()
     comm = int(total * int(db_setting('commission', '15')) / 100)
@@ -333,8 +318,8 @@ def process_winner(uid, r):
     db_jackpot_reset()
     return name, cn, prize, jp
 
-def winner_msg(name, cn, prize, jp, pattern, line_nums, all_marked, called_count):
-    line_str = " , ".join(line_nums) if line_nums else ""
+def make_winner_msg(name, cn, prize, jp, pattern, line_nums, all_marked, called_count):
+    line_str = " , ".join(line_nums) if line_nums else "—"
     all_str = ", ".join(all_marked) if all_marked else "—"
     return (
         f"🌟🌟🌟 <b>ቢንጎ!</b> 🌟🌟🌟\n"
@@ -344,8 +329,8 @@ def winner_msg(name, cn, prize, jp, pattern, line_nums, all_marked, called_count
         f"👤 <b>ውድ አሸናፊ:</b> {name}\n"
         f"🎫 <b>ያሸነፍክበት ካርድ:</b> #{cn}\n"
         f"🏆 <b>ያሸነፍክበት መስመር:</b> {pattern}\n"
-        f"📌 <b>የዘጋህባቸው ቁጥሮች:</b>\n  {line_str}\n"
-        f"🎯 <b>በካርድህ ላይ የተዘጉ ሁሉም:</b>\n  {all_str}\n"
+        f"📌 <b>የዘጋህባቸው ቁጥሮች:</b> {line_str}\n"
+        f"🎯 <b>በካርድህ ላይ የተዘጉ ሁሉም:</b> {all_str}\n"
         f"📊 <b>ጠቅላላ ጥሪዎች:</b> {called_count}\n"
         f"💰 <b>ያገኙት ሽልማት:</b> {prize} ብር\n"
         f"🎰 <b>ጃክፖት:</b> {jp} ብር\n"
@@ -389,9 +374,8 @@ def api_room(rid):
         'called_count': len(r.called_numbers), 'remaining': len(r.available_numbers),
         'price': db_setting('price', '50 ብር'), 'winners': r.winners,
         'winner_name': r.winner_name, 'winner_card': r.winner_card,
-        'winner_prize': r.winner_prize,
-        'winner_pattern': r.winner_pattern,
-        'winner_marked': r.winner_marked,
+        'winner_prize': r.winner_prize, 'winner_pattern': r.winner_pattern,
+        'winner_marked': r.winner_marked, 'winner_line_nums': r.winner_line_nums,
         'taken_cards': list(r.taken_cards), 'total_cards': len(r.card_pool),
         'last_called': r.last_called, 'paused': r.paused,
         'jackpot': db_jackpot(),
@@ -408,7 +392,7 @@ def api_user_info():
         if ref and ref != uid and db_user(ref):
             db_balance_delta(ref, 20)
             db_tx(ref, 'referral', 20, 'completed', 'ጓደኛ ጋበዘ')
-            try: bot.send_message(ref, "🎉 +20 ብር! 💚")
+            try: bot.send_message(ref, "🎉 ጓደኛ በመጋበዝ +20 ብር! 💚")
             except: pass
     elif u['name'] != name:
         db_update_name(uid, name); u['name'] = name
@@ -425,10 +409,10 @@ def api_user_info():
 def api_daily():
     d = request.json; uid = d.get('user_id')
     u = db_user(uid)
-    if not u: return jsonify({'ok': False, 'msg': '🙏 ይቅርታ፣ መጀመሪያ ገጹን ክፈት።'})
+    if not u: return jsonify({'ok': False, 'msg': '🙏 መጀመሪያ ገጹን ክፈት።'})
     today = datetime.now().strftime('%Y-%m-%d')
     if u['daily_last'] == today:
-        return jsonify({'ok': False, 'msg': '🙏 የዛሬ ስጦታዎን ተቀብለዋል። ነገ ይምጡ! 💚'})
+        return jsonify({'ok': False, 'msg': '🙏 የዛሬ ስጦታ ተቀብለዋል። ነገ ይምጡ! 💚'})
     bonus = int(db_setting('daily_bonus', '10'))
     db_balance_delta(uid, bonus)
     with db_lock:
@@ -462,7 +446,7 @@ def api_join():
     if u['balance'] < price:
         return jsonify({'ok': False, 'need_payment': True, 'balance': u['balance'],
                         'price': price, 'account': db_setting('account', ''),
-                        'msg': f'🙏 በቂ ባላንስ የለህም።\n💰 {u["balance"]} ብር\n💵 {price} ብር\n🏦 {db_setting("account", "")}'})
+                        'msg': f'🙏 በቂ ባላንስ የለህም።'})
     nb = db_balance_delta(uid, -price)
     db_tx(uid, 'buy_card', -price, 'completed', f'ካርድ #{cn}')
     r.taken_cards.add(ci)
@@ -474,7 +458,7 @@ def api_join():
     db_update_name(uid, get_name(uid))
     db_jackpot_add(int(price * int(db_setting('jackpot_percent', '10')) / 100))
     try:
-        bot.send_message(ADMIN_ID, f"🎫 <b>ካርድ ተመረጠ</b>\n👤 {get_name(uid)}\n🎫 #{cn}", parse_mode='HTML')
+        bot.send_message(ADMIN_ID, f"🎫 ካርድ ተመረጠ\n👤 {get_name(uid)}\n🎫 #{cn}", parse_mode='HTML')
     except: pass
     return jsonify({'ok': True, 'card': r.card_pool[ci], 'card_num': cn, 'new_balance': nb})
 
@@ -514,23 +498,22 @@ def api_bingo():
         if pattern:
             r.winners.append(uid)
             r.winner_pattern = pattern
-            r.winner_marked = r.get_marked_numbers(card, r.called_numbers)
-            line_nums = r.get_marked_numbers_by_line(card, r.called_numbers, pattern)
+            r.winner_marked = r.get_marked(card, r.called_numbers)
+            r.winner_line_nums = r.get_line_nums(card, r.called_numbers, pattern)
             name, cn, prize, jp = process_winner(uid, r)
-            msg = winner_msg(name, cn, prize, jp, pattern, line_nums, r.winner_marked, len(r.called_numbers))
+            msg = make_winner_msg(name, cn, prize, jp, pattern, r.winner_line_nums, r.winner_marked, len(r.called_numbers))
             if r.chat_id:
                 try: bot.send_message(r.chat_id, msg, parse_mode='HTML')
                 except: pass
             try: bot.send_message(ADMIN_ID, msg, parse_mode='HTML')
             except: pass
             try:
-                bot.send_message(uid,
-                    f"🌟 <b>እንኳን ደስ አለህ/ሽ!</b>\n💰 {prize} ብር\n🎫 #{cn}\n🏆 {pattern}\n🙏", parse_mode='HTML')
+                bot.send_message(uid, f"🌟 <b>እንኳን ደስ አለህ/ሽ!</b>\n💰 {prize} ብር\n🎫 #{cn}\n🏆 {pattern}\n🙏", parse_mode='HTML')
             except: pass
             r.is_active = False; r.game_state = 'finished'
             threading.Thread(target=auto_restart_room, args=(rid,), daemon=True).start()
             return jsonify({'ok': True, 'winner': name, 'card_num': cn, 'prize': prize,
-                            'pattern': pattern, 'line_nums': line_nums, 'marked': r.winner_marked})
+                            'pattern': pattern, 'line_nums': r.winner_line_nums, 'marked': r.winner_marked})
     return jsonify({'ok': False, 'msg': '🙏 ገና አልተሸነፍክም። ካርድህን በጥንቃቄ ተመልከት።'})
 
 @app.route('/api/leaderboard')
@@ -550,14 +533,13 @@ def api_withdraw():
     u = db_user(uid)
     if not u: return jsonify({'ok': False, 'msg': '🙏 ይቅርታ።'})
     min_w = int(db_setting('min_withdraw', '100'))
-    if amt < min_w: return jsonify({'ok': False, 'msg': f'🙏 አነስተኛው {min_w} ብር ነው።'})
-    if u['balance'] < amt: return jsonify({'ok': False, 'msg': f'🙏 በቂ ባላንስ የለህም። ({u["balance"]} ብር)'})
-    if not acc: return jsonify({'ok': False, 'msg': '🙏 አካውንትህን አስገባ።'})
-    db_balance_delta(uid, -amt)
-    db_tx(uid, 'withdraw', -amt, 'pending', acc)
-    try: bot.send_message(ADMIN_ID, f"💸 <b>ማውጣት</b>\n👤 {u['name']}\n💰 {amt} ብር\n🏦 {acc}", parse_mode='HTML')
+    if amt < min_w: return jsonify({'ok': False, 'msg': f'🙏 አነስተኛው {min_w} ብር።'})
+    if u['balance'] < amt: return jsonify({'ok': False, 'msg': f'🙏 በቂ የለም።'})
+    if not acc: return jsonify({'ok': False, 'msg': '🙏 አካውንት አስገባ።'})
+    db_balance_delta(uid, -amt); db_tx(uid, 'withdraw', -amt, 'pending', acc)
+    try: bot.send_message(ADMIN_ID, f"💸 ማውጣት\n👤 {u['name']}\n💰 {amt}\n🏦 {acc}", parse_mode='HTML')
     except: pass
-    return jsonify({'ok': True, 'msg': f'🙏 ጥያቄህ ተልኳል። {amt} ብር ወደ {acc} ይላካል።'})
+    return jsonify({'ok': True, 'msg': f'🙏 ጥያቄህ ተልኳል።'})
 
 # ================= 🔐 ADMIN API =================
 
@@ -576,9 +558,8 @@ def adm_create_room():
     rooms[rid].join_deadline = time.time() + 120
     if cid:
         try:
-            bot.send_message(cid,
-                f"🌟 <b>እንኳን ደህና መጡ!</b>\n🎮 {rooms[rid].game_name} - ክፍል {rid}\n💰 {db_setting('price')}\n🙏 ገጹን ክፈቱ!",
-                reply_markup=get_panel(rid), parse_mode='HTML')
+            bot.send_message(cid, f"🌟 አዲስ ጨዋታ!\n🎮 ክፍል {rid}\n💰 {db_setting('price')}\n🙏 ገጹን ክፈቱ!",
+                             reply_markup=get_panel(rid), parse_mode='HTML')
         except: pass
     return jsonify({'ok': True, 'room_id': rid})
 
@@ -626,9 +607,10 @@ def adm_force_win():
         r.winners.append(t)
         card = r.players[t][0]
         r.winner_pattern = "Force Win (በአስተዳዳሪ)"
-        r.winner_marked = r.get_marked_numbers(card, r.called_numbers)
+        r.winner_marked = r.get_marked(card, r.called_numbers)
+        r.winner_line_nums = []
         name, cn, prize, jp = process_winner(t, r)
-        msg = winner_msg(name, cn, prize, jp, r.winner_pattern, [], r.winner_marked, len(r.called_numbers))
+        msg = make_winner_msg(name, cn, prize, jp, r.winner_pattern, [], r.winner_marked, len(r.called_numbers))
         if r.chat_id:
             try: bot.send_message(r.chat_id, msg, parse_mode='HTML')
             except: pass
@@ -676,8 +658,7 @@ def adm_add_bal():
     if not is_admin(d): return jsonify({'error': 'unauthorized'}), 403
     uid = d.get('target_id'); amt = d.get('amount')
     if uid and amt:
-        nb = db_balance_delta(uid, int(amt))
-        db_tx(uid, 'admin_add', int(amt), 'completed', 'በአስተዳዳሪ')
+        nb = db_balance_delta(uid, int(amt)); db_tx(uid, 'admin_add', int(amt), 'completed', 'በአስተዳዳሪ')
         try: bot.send_message(uid, f"🙏 +{amt} ብር!\n💵 {nb} ብር")
         except: pass
         return jsonify({'ok': True, 'balance': nb})
@@ -783,6 +764,51 @@ def adm_aw():
         return jsonify({'ok': True})
     return jsonify({'ok': False})
 
+@app.route('/api/admin/add_pending_payment', methods=['POST'])
+def adm_add_pp():
+    d = request.json
+    if not is_admin(d): return jsonify({'error': 'unauthorized'}), 403
+    pid = f"pay_{int(time.time()*1000)}_{d.get('user_id')}"
+    pending_payments[pid] = {'user_id': d.get('user_id'), 'name': d.get('name'),
+                              'price': d.get('price'), 'date': datetime.now().isoformat(), 'status': 'pending'}
+    return jsonify({'ok': True, 'payment_id': pid})
+
+@app.route('/api/admin/pending_payments', methods=['POST'])
+def adm_pp():
+    d = request.json
+    if not is_admin(d): return jsonify({'error': 'unauthorized'}), 403
+    result = []
+    for pid, p in pending_payments.items():
+        if p['status'] == 'pending':
+            result.append({'payment_id': pid, 'user_id': p['user_id'], 'name': p['name'],
+                           'price': p['price'], 'date': p['date']})
+    return jsonify({'pending': result})
+
+@app.route('/api/admin/approve_payment', methods=['POST'])
+def adm_ap():
+    d = request.json
+    if not is_admin(d): return jsonify({'error': 'unauthorized'}), 403
+    pid = d.get('payment_id'); action = d.get('action')
+    if pid not in pending_payments:
+        return jsonify({'ok': False, 'msg': '🙏 ክፍያው አልተገኘም።'})
+    p = pending_payments[pid]
+    if p['status'] != 'pending':
+        return jsonify({'ok': False, 'msg': '🙏 ቀድሞ ተስተናግዷል።'})
+    uid = p['user_id']; price = p['price']
+    if action == 'approve':
+        nb = db_balance_delta(uid, price)
+        db_tx(uid, 'deposit', price, 'completed', 'ክፍያ')
+        p['status'] = 'approved'
+        try:
+            bot.send_message(uid, f"🌟 <b>ክፍያ ተረጋግጧል!</b>\n💰 +{price} ብር\n💵 {nb} ብር\n🍀", parse_mode='HTML')
+        except: pass
+        return jsonify({'ok': True, 'balance': nb})
+    else:
+        p['status'] = 'rejected'
+        try: bot.send_message(uid, "🙏 ክፍያ ውድቅ።")
+        except: pass
+        return jsonify({'ok': True})
+
 # ================= 🤖 የቦት =================
 
 def get_panel(rid=None):
@@ -802,22 +828,13 @@ def get_panel(rid=None):
 @bot.message_handler(commands=['panel'])
 def cmd_panel(msg):
     if msg.from_user.id != ADMIN_ID: return
-    bot.send_message(msg.chat.id,
-        "🎛️ <b>እንኳን ደህና መጡ ውድ አስተዳዳሪ!</b>\n\n🙏 የእርስዎ ማዕከል ነው።",
-        reply_markup=get_panel(), parse_mode='HTML')
+    bot.send_message(msg.chat.id, "🎛️ <b>እንኳን ደህና መጡ ውድ አስተዳዳሪ!</b>", reply_markup=get_panel(), parse_mode='HTML')
 
 @bot.message_handler(commands=['balance'])
 def cmd_bal(msg):
     uid = msg.from_user.id
     u = db_user(uid) or db_new_user(uid, msg.from_user.first_name)
     bot.reply_to(msg, f"🙏 {u['name']}!\n💰 {u['balance']} ብር\n🏆 {u['total_wins']}\n🎮 {u['total_games']}\n🔗 {u['referral_code']}\n💚", parse_mode='HTML')
-
-@bot.message_handler(commands=['rules'])
-def cmd_rules(msg):
-    r = (f"📜 <b>ህጎች</b>\n1️⃣ ካርድ: {db_setting('price')}\n2️⃣ ጨዋታ ሲጀምር መግባት አይቻልም\n"
-         f"3️⃣ ካርድ ገደብ: {db_setting('max_cards_per_player','2')}\n4️⃣ ማሸነፍ: {db_setting('win_pattern','single')}\n"
-         f"5️⃣ ማውጣት: {db_setting('min_withdraw','100')} ብር\n6️⃣ ስጦታ: {db_setting('daily_bonus','10')} ብር\n🙏 💚")
-    bot.send_message(msg.chat.id, r, parse_mode='HTML')
 
 @bot.message_handler(commands=['daily'])
 def cmd_daily(msg):
@@ -842,13 +859,13 @@ def cmd_w(msg):
     uid = msg.from_user.id
     u = db_user(uid) or db_new_user(uid, msg.from_user.first_name)
     min_w = int(db_setting('min_withdraw', '100'))
-    if amt < min_w: bot.reply_to(msg, f"🙏 አነስተኛው {min_w} ብር።"); return
-    if u['balance'] < amt: bot.reply_to(msg, f"🙏 በቂ የለም። ({u['balance']})"); return
+    if amt < min_w: bot.reply_to(msg, f"🙏 አነስተኛው {min_w}።"); return
+    if u['balance'] < amt: bot.reply_to(msg, f"🙏 በቂ የለም።"); return
     if not acc: bot.reply_to(msg, "🙏 አካውንት አስገባ።"); return
     db_balance_delta(uid, -amt); db_tx(uid, 'withdraw', -amt, 'pending', acc)
     try: bot.send_message(ADMIN_ID, f"💸 {u['name']}\n💰 {amt}\n🏦 {acc}", parse_mode='HTML')
     except: pass
-    bot.reply_to(msg, f"🙏 ጥያቄህ ተልኳል።")
+    bot.reply_to(msg, "🙏 ጥያቄህ ተልኳል።")
 
 @bot.message_handler(commands=['addbalance'])
 def cmd_add(msg):
@@ -862,7 +879,7 @@ def cmd_add(msg):
     except: bot.reply_to(msg, "🙏 /addbalance ID AMOUNT")
 
 @bot.message_handler(commands=['jackpot'])
-def cmd_jp(msg): bot.reply_to(msg, f"🎰 ጃክፖት: <b>{db_jackpot()} ብር</b>", parse_mode='HTML')
+def cmd_jp(msg): bot.reply_to(msg, f"🎰 {db_jackpot()} ብር", parse_mode='HTML')
 
 @bot.message_handler(commands=['leaderboard'])
 def cmd_lb(msg):
@@ -889,7 +906,6 @@ def adm_cb(c):
     if c.from_user.id != ADMIN_ID:
         bot.answer_callback_query(c.id, "🙏 ለአስተዳዳሪ ብቻ።"); return
     d = c.data; cid = c.message.chat.id
-
     if d == "adm_new_room":
         rid = room_counter; room_counter += 1
         rooms[rid] = BingoGame(rid)
@@ -918,12 +934,12 @@ def adm_cb(c):
         if rid in rooms:
             rooms[rid].is_active = False; rooms[rid].game_state = 'finished'
         bot.answer_callback_query(c.id, "🛑")
-        bot.send_message(cid, f"🛑 ቆሟል።")
+        bot.send_message(cid, "🛑 ቆሟል።")
     elif d.startswith("adm_dash_"):
         rid = int(d.split('_')[2])
         if rid not in rooms: return
         r = rooms[rid]
-        bot.send_message(cid, f"📊 <b>ክፍል {rid}</b>\n🎮 {r.game_state}\n👥 {len(r.approved_players)}\n📢 {len(r.called_numbers)}\n📦 {len(r.available_numbers)}\n🎰 {db_jackpot()}", parse_mode='HTML')
+        bot.send_message(cid, f"📊 {r.game_state}\n👥 {len(r.approved_players)}\n📢 {len(r.called_numbers)}\n📦 {len(r.available_numbers)}\n🎰 {db_jackpot()}", parse_mode='HTML')
         bot.answer_callback_query(c.id, "📊")
     elif d == "adm_settings":
         bot.send_message(cid, f"⚙️ ዋጋ: {db_setting('price')}\n🏦 {db_setting('account')}\n⏱️ {db_setting('call_interval')}s\n💹 {db_setting('commission')}%\n🎁 {db_setting('daily_bonus')}\n🎫 {db_setting('max_cards_per_player')}\n🏆 {db_setting('win_pattern')}", parse_mode='HTML')
@@ -954,8 +970,7 @@ def call_loop(rid):
             break
         num = r.available_numbers.pop(); r.called_numbers.append(num); r.last_called = num
         if r.chat_id:
-            try:
-                bot.send_message(r.chat_id, f"🎯 <b>{num}</b>\n📜 {', '.join(map(str, r.called_numbers[-5:]))}", parse_mode='HTML')
+            try: bot.send_message(r.chat_id, f"🎯 <b>{num}</b>\n📜 {', '.join(map(str, r.called_numbers[-5:]))}", parse_mode='HTML')
             except: pass
         winners = []
         for uid, cards in r.players.items():
@@ -967,17 +982,16 @@ def call_loop(rid):
         if winners:
             for uid, card, pat in winners:
                 r.winner_pattern = pat
-                r.winner_marked = r.get_marked_numbers(card, r.called_numbers)
-                line_nums = r.get_marked_numbers_by_line(card, r.called_numbers, pat)
+                r.winner_marked = r.get_marked(card, r.called_numbers)
+                r.winner_line_nums = r.get_line_nums(card, r.called_numbers, pat)
                 name, cn, prize, jp = process_winner(uid, r)
-                msg = winner_msg(name, cn, prize, jp, pat, line_nums, r.winner_marked, len(r.called_numbers))
+                msg = make_winner_msg(name, cn, prize, jp, pat, r.winner_line_nums, r.winner_marked, len(r.called_numbers))
                 if r.chat_id:
                     try: bot.send_message(r.chat_id, msg, parse_mode='HTML')
                     except: pass
                 try: bot.send_message(ADMIN_ID, msg, parse_mode='HTML')
                 except: pass
-                try:
-                    bot.send_message(uid, f"🌟 <b>እንኳን ደስ አለህ/ሽ!</b>\n💰 {prize} ብር\n🎫 #{cn}\n🏆 {pat}\n🙏", parse_mode='HTML')
+                try: bot.send_message(uid, f"🌟 <b>እንኳን ደስ አለህ/ሽ!</b>\n💰 {prize} ብር\n🎫 #{cn}\n🏆 {pat}\n🙏", parse_mode='HTML')
                 except: pass
             r.is_active = False; r.game_state = 'finished'
             threading.Thread(target=auto_restart_room, args=(rid,), daemon=True).start()
@@ -997,9 +1011,8 @@ def auto_restart_room(old_rid):
     if old and old.chat_id:
         rooms[rid].chat_id = old.chat_id
         try:
-            bot.send_message(old.chat_id,
-                f"🌟 <b>አዲስ ጨዋታ!</b>\n🎮 ክፍል {rid}\n💰 {db_setting('price')}\n🙏 ገጹን ክፈቱ!",
-                reply_markup=get_panel(rid), parse_mode='HTML')
+            bot.send_message(old.chat_id, f"🌟 አዲስ ጨዋታ!\n🎮 ክፍል {rid}\n💰 {db_setting('price')}\n🙏 ገጹን ክፈቱ!",
+                             reply_markup=get_panel(rid), parse_mode='HTML')
         except: pass
 
 @bot.message_handler(content_types=['photo'])
@@ -1008,11 +1021,14 @@ def on_photo(m):
     u = db_user(uid) or db_new_user(uid, m.from_user.first_name)
     if u['banned']: return
     price = price_int()
+    pid = f"pay_{int(time.time()*1000)}_{uid}"
+    pending_payments[pid] = {'user_id': uid, 'name': u['name'], 'price': price,
+                              'date': datetime.now().isoformat(), 'status': 'pending'}
     mk = InlineKeyboardMarkup()
     mk.row(InlineKeyboardButton("✅ አጽድቅ", callback_data=f"bal_approve_{uid}"),
            InlineKeyboardButton("❌ ውድቅ", callback_data=f"bal_reject_{uid}"))
     bot.send_message(ADMIN_ID,
-        f"🔔 <b>ክፍያ</b>\n👤 {u['name']}\n🆔 {uid}\n💰 {u['balance']}\n💵 +{price}",
+        f"🔔 <b>አዲስ ክፍያ</b>\n👤 {u['name']}\n🆔 {uid}\n💰 {u['balance']} ብር\n💵 +{price}\n\n💡 በ Mini App ውስጥም!",
         reply_markup=mk, parse_mode='HTML')
     bot.forward_message(ADMIN_ID, m.chat.id, m.message_id)
     bot.reply_to(m, f"🙏 {u['name']}!\n✅ ስክሪንሾት ተልኳል።\n💰 {u['balance']} ብር\n💚")
