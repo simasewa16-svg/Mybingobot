@@ -11,27 +11,20 @@
     background:linear-gradient(180deg,#f5e6f7 0%,#ede0f0 100%);
     color:#333; min-height:100vh; padding:10px; padding-bottom:80px;
   }
-  
-  /* Header */
   .header {
     background:linear-gradient(135deg,#8e44ad,#6c3483);
     color:#fff; padding:12px; border-radius:14px;
     text-align:center; margin-bottom:8px;
     box-shadow:0 4px 15px rgba(142,68,173,0.4);
   }
-  .header h1 { font-size:18px; letter-spacing:0.5px; white-space:nowrap; overflow-x:auto; scrollbar-width:none; }
-  .header h1::-webkit-scrollbar { display:none; }
+  .header h1 { font-size:18px; letter-spacing:0.5px; }
   .header p { font-size:12px; opacity:0.9; margin-top:3px; }
-
-  /* Stats */
   .stats-bar { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:8px; }
   .stat-box { background:#fff; border-radius:10px; padding:6px 3px; text-align:center;
     box-shadow:0 2px 6px rgba(0,0,0,0.08); border:1px solid #e0c4e8; }
   .stat-box .label { font-size:9px; color:#888; }
   .stat-box .value { font-size:15px; font-weight:bold; color:#c0392b; margin-top:2px; }
   .stat-box.live .value { color:#27ae60; }
-
-  /* Timer */
   .timer-banner {
     background:linear-gradient(135deg,#e74c3c,#c0392b);
     color:#fff; padding:10px; border-radius:12px;
@@ -47,8 +40,6 @@
     0%,100% { opacity:1; }
     50% { opacity:0.7; }
   }
-
-  /* Called number + My card row */
   .top-row {
     display:grid; grid-template-columns:80px 1fr; gap:8px;
     margin-bottom:8px;
@@ -63,8 +54,6 @@
   }
   .called-box .label { font-size:9px; opacity:0.9; margin-bottom:4px; }
   .called-box .value { font-size:36px; font-weight:bold; line-height:1; }
-  .called-box .empty { font-size:14px; opacity:0.7; }
-  
   .mycard-box {
     background:#fff; border-radius:14px; padding:8px;
     box-shadow:0 2px 8px rgba(0,0,0,0.06);
@@ -74,8 +63,6 @@
     font-size:11px; font-weight:bold; color:#8e44ad;
     text-align:center; margin-bottom:5px;
   }
-
-  /* Bingo header (B I N G O) */
   .bingo-header {
     display:grid; grid-template-columns:repeat(5,1fr); gap:3px;
     margin-bottom:3px;
@@ -89,7 +76,6 @@
   .b-yellow { background:#f39c12; }
   .b-blue { background:#3498db; }
   .b-purple { background:#9b59b6; }
-
   .mini-card-grid {
     display:grid; grid-template-columns:repeat(5,1fr); gap:3px;
   }
@@ -100,13 +86,12 @@
     border:1px solid #e0c4e8;
   }
   .mini-card-cell.called {
-    background:#f39c12; color:#fff; border-color:#e67e22;
+    background:#27ae60; color:#fff; border-color:#1e8449;
+    box-shadow:0 2px 6px rgba(39,174,96,0.4);
   }
   .mini-card-cell.free {
     background:#f1c40f; color:#fff; border-color:#f39c12;
   }
-
-  /* Master board - scrollable */
   .board-card {
     background:#fff; border-radius:14px; padding:8px;
     margin-bottom:8px; box-shadow:0 2px 8px rgba(0,0,0,0.06);
@@ -123,7 +108,6 @@
   }
   .board-scroll::-webkit-scrollbar { width:4px; }
   .board-scroll::-webkit-scrollbar-thumb { background:#c39bd3; border-radius:2px; }
-
   .num-grid {
     display:grid; grid-template-columns:repeat(8,1fr); gap:3px;
   }
@@ -137,15 +121,12 @@
     background:#f39c12; color:#fff;
     box-shadow:0 2px 6px rgba(243,156,18,0.4);
   }
-
-  /* Card selector - scrollable */
   .cards-scroll {
     max-height:180px; overflow-y:auto;
     padding:4px; background:#faf5fc; border-radius:8px;
   }
   .cards-scroll::-webkit-scrollbar { width:4px; }
   .cards-scroll::-webkit-scrollbar-thumb { background:#c39bd3; border-radius:2px; }
-  
   .card-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; }
   .card-btn {
     aspect-ratio:1; background:linear-gradient(135deg,#27ae60,#1e8449);
@@ -157,8 +138,6 @@
   .card-btn.taken {
     background:#ccc; color:#888; box-shadow:none; cursor:not-allowed;
   }
-
-  /* Full card display */
   .full-card-grid {
     display:grid; grid-template-columns:repeat(5,1fr); gap:5px;
   }
@@ -168,10 +147,11 @@
     font-size:14px; font-weight:bold; color:#333;
     border:2px solid #e0c4e8;
   }
-  .full-card-cell.called { background:#f39c12; color:#fff; border-color:#e67e22; }
+  .full-card-cell.called { 
+    background:#27ae60; color:#fff; border-color:#1e8449;
+    box-shadow:0 2px 8px rgba(39,174,96,0.5);
+  }
   .full-card-cell.free { background:#f1c40f; color:#fff; border-color:#f39c12; }
-
-  /* Buttons */
   .btn {
     width:100%; padding:14px; border:none; border-radius:12px;
     font-size:16px; font-weight:bold; cursor:pointer;
@@ -182,8 +162,6 @@
     color:#fff; box-shadow:0 4px 0 #b9770e;
   }
   .btn-bingo:active { transform:translateY(4px); box-shadow:none; }
-
-  /* Admin panel */
   .admin-panel {
     background:linear-gradient(135deg,#2c3e50,#1a252f);
     color:#ecf0f1; border-radius:14px; padding:10px;
@@ -203,15 +181,55 @@
   .admin-grid {
     display:grid; grid-template-columns:1fr 1fr; gap:4px;
   }
-
-  /* Utility */
   .hidden { display:none !important; }
   .loading { text-align:center; padding:40px; color:#8e44ad; font-size:14px; }
-  .winner-banner {
-    background:linear-gradient(135deg,#f39c12,#e67e22);
-    color:#fff; padding:16px; border-radius:12px;
-    text-align:center; font-weight:bold; margin:8px 0;
-    font-size:16px; animation:pulse 1.5s infinite;
+  .winner-section {
+    background:linear-gradient(135deg,#f39c12,#e67e22,#f39c12);
+    background-size:200% 200%;
+    animation:winnerGlow 2s ease-in-out infinite;
+    color:#fff; padding:20px; border-radius:18px;
+    text-align:center; margin:10px 0;
+    box-shadow:0 8px 25px rgba(243,156,18,0.6);
+    border:3px solid #fff;
+  }
+  @keyframes winnerGlow {
+    0%,100% { background-position:0% 50%; transform:scale(1); }
+    50% { background-position:100% 50%; transform:scale(1.02); }
+  }
+  .winner-section .crown { font-size:48px; margin-bottom:8px; }
+  .winner-section .congrats {
+    font-size:22px; font-weight:bold;
+    text-shadow:2px 2px 4px rgba(0,0,0,0.3);
+    margin-bottom:12px;
+  }
+  .winner-section .winner-name {
+    background:rgba(255,255,255,0.25);
+    padding:8px 16px; border-radius:20px;
+    font-size:18px; font-weight:bold;
+    display:inline-block; margin-bottom:8px;
+  }
+  .winner-section .card-info {
+    font-size:14px; opacity:0.95;
+    margin-top:8px;
+  }
+  .winner-section .card-number {
+    background:rgba(255,255,255,0.3);
+    padding:4px 12px; border-radius:12px;
+    font-size:16px; font-weight:bold;
+    display:inline-block; margin-top:4px;
+  }
+  .winner-section .trophy {
+    font-size:32px; margin-top:8px;
+    animation:bounce 1s infinite;
+  }
+  @keyframes bounce {
+    0%,100% { transform:translateY(0); }
+    50% { transform:translateY(-10px); }
+  }
+  .winner-section .info-line {
+    font-size:12px; opacity:0.9;
+    margin-top:10px; padding-top:10px;
+    border-top:1px dashed rgba(255,255,255,0.5);
   }
   .toast {
     position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
@@ -224,9 +242,23 @@
     from { opacity:0; transform:translate(-50%,20px); }
     to { opacity:1; transform:translate(-50%,0); }
   }
+  .confetti-container {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    pointer-events:none; z-index:9998; overflow:hidden;
+  }
+  .confetti {
+    position:absolute; width:10px; height:10px;
+    animation:confettiFall 3s linear infinite;
+  }
+  @keyframes confettiFall {
+    0% { transform:translateY(-100vh) rotate(0deg); opacity:1; }
+    100% { transform:translateY(100vh) rotate(720deg); opacity:0; }
+  }
 </style>
 </head>
 <body>
+
+<div class="confetti-container" id="confetti-container"></div>
 
 <div class="header">
   <h1 id="game-title">🎰 ዘና ቢንጎ ከድጎ</h1>
@@ -260,7 +292,20 @@
     ⏱️ የመግቢያ ጊዜ: <span id="timer-text">0</span> ሰከንድ
   </div>
 
-  <!-- Top Row: Called Number + My Mini Card -->
+  <div id="winner-section" class="winner-section hidden">
+    <div class="crown">👑</div>
+    <div class="congrats">🎊 እንኳን ደስ ያለህ/ሽ! 🎊</div>
+    <div class="winner-name" id="winner-name">👤</div>
+    <div class="card-info">
+      🎫 ያሸነፈበት ካርድ:
+      <div class="card-number" id="winner-card">#?</div>
+    </div>
+    <div class="info-line">
+      <span id="winner-stats">🎯 ጠቅላላ የተጠሩ: -</span>
+    </div>
+    <div class="trophy">🏆</div>
+  </div>
+
   <div class="top-row">
     <div class="called-box">
       <div class="label">🎯 የተጠራ</div>
@@ -279,7 +324,6 @@
     </div>
   </div>
 
-  <!-- Master Board - scrollable -->
   <div class="board-card">
     <div class="board-title">📺 የጨዋታ ሰሌዳ (1-90)</div>
     <div class="board-scroll">
@@ -287,7 +331,6 @@
     </div>
   </div>
 
-  <!-- Card Selector - scrollable -->
   <div id="join-section">
     <div class="board-card">
       <div class="board-title">🎫 ካርድ ምረጥ</div>
@@ -297,7 +340,6 @@
     </div>
   </div>
 
-  <!-- Full Card Section (after selection) -->
   <div id="card-section" class="hidden">
     <div class="board-card">
       <div class="board-title">🎲 የእኔ ካርድ <span id="full-card-num-label"></span></div>
@@ -313,12 +355,6 @@
     <button class="btn btn-bingo" id="bingo-btn">🎉 BINGO!</button>
   </div>
 
-  <!-- Winner Banner -->
-  <div id="winner-section" class="hidden">
-    <div class="winner-banner" id="winner-text">🎉 BINGO!</div>
-  </div>
-
-  <!-- 🔐 Secret Admin Panel -->
   <div id="admin-panel" class="admin-panel hidden">
     <div class="title">🔐 የአስተዳዳሪ ምስጢራዊ ፓነል</div>
     <div class="admin-grid">
@@ -328,9 +364,6 @@
       <button class="admin-btn" onclick="adminForceWin()">🏆 አሸናፊ ምረጥ</button>
       <button class="admin-btn" onclick="adminSetName()">✏️ ስም ቀይር</button>
       <button class="admin-btn" onclick="adminReset()">🔄 ጨዋታ አስጀምር</button>
-    </div>
-    <div id="admin-info" style="font-size:10px; margin-top:6px; color:#95a5a6; text-align:center;">
-      Admin: 5671366303 | Room: <span id="admin-room">-</span>
     </div>
   </div>
 
@@ -346,6 +379,7 @@ let ROOM_ID = 1;
 let MY_CARD_NUM = null;
 let HAS_SELECTED = false;
 let LAST_CALLED = null;
+let WINNER_SHOWN = false;
 
 async function api(path, method='GET', body=null) {
   const opts = { method, headers: {'Content-Type':'application/json'} };
@@ -364,6 +398,21 @@ function showToast(msg) {
   t.innerText = msg;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 2500);
+}
+
+function launchConfetti() {
+  const container = document.getElementById('confetti-container');
+  const colors = ['#f39c12','#e74c3c','#27ae60','#3498db','#9b59b6','#f1c40f'];
+  for (let i = 0; i < 50; i++) {
+    const c = document.createElement('div');
+    c.className = 'confetti';
+    c.style.left = Math.random() * 100 + '%';
+    c.style.background = colors[Math.floor(Math.random() * colors.length)];
+    c.style.animationDelay = Math.random() * 2 + 's';
+    c.style.animationDuration = (2 + Math.random() * 2) + 's';
+    container.appendChild(c);
+    setTimeout(() => c.remove(), 5000);
+  }
 }
 
 function renderMasterBoard(called) {
@@ -437,6 +486,16 @@ async function selectCard(num) {
   document.getElementById('card-num-label').innerText = `#${num}`;
 }
 
+function showWinnerBanner(data) {
+  if (WINNER_SHOWN) return;
+  WINNER_SHOWN = true;
+  document.getElementById('winner-section').classList.remove('hidden');
+  document.getElementById('winner-name').innerText = `👤 ${data.winner || 'ተጫዋች'}`;
+  document.getElementById('winner-card').innerText = `#${data.winner_card || '?'}`;
+  document.getElementById('winner-stats').innerText = `🎯 ጠቅላላ የተጠሩ: ${data.called_count || 0}`;
+  launchConfetti();
+}
+
 async function loadRoom() {
   const params = new URLSearchParams(window.location.search);
   ROOM_ID = parseInt(params.get('room') || 1);
@@ -456,7 +515,6 @@ async function loadRoom() {
   document.getElementById('s-cards').innerText = `${data.taken_cards.length}/${data.total_cards}`;
   document.getElementById('s-price').innerText = data.price;
 
-  // Timer
   const timerBanner = document.getElementById('timer-banner');
   if (data.join_open && data.time_left > 0) {
     timerBanner.classList.remove('hidden');
@@ -466,7 +524,6 @@ async function loadRoom() {
     timerBanner.classList.add('hidden');
   }
 
-  // Called number display
   const calledDisplay = document.getElementById('called-num-display');
   if (data.last_called) {
     calledDisplay.innerText = data.last_called;
@@ -486,20 +543,26 @@ async function loadRoom() {
     document.getElementById('join-section').classList.add('hidden');
   }
 
-  if (data.winners && data.winners.length > 0) {
-    document.getElementById('winner-section').classList.remove('hidden');
-    document.getElementById('winner-text').innerText = `🎉 BINGO! አሸናፊ ተገኝቷል!`;
+  if (data.winners && data.winners.length > 0 && data.winner_name) {
+    showWinnerBanner({
+      winner: data.winner_name,
+      winner_card: data.winner_card,
+      called_count: data.called_count
+    });
   }
   return data;
 }
 
 async function updateMyCard() {
-  if (!MY_CARD_NUM) return;
-  const res = await api('/api/mycard', { method:'POST' }, { user_id: USER_ID, room_id: ROOM_ID });
+  const res = await api('/api/mycard', 'POST', { user_id: USER_ID, room_id: ROOM_ID });
   if (res.card) {
+    MY_CARD_NUM = res.card_num;
+    HAS_SELECTED = true;
     renderMiniCard(res.card);
     renderFullCard(res.card);
     document.getElementById('card-section').classList.remove('hidden');
+    document.getElementById('full-card-num-label').innerText = `#${res.card_num}`;
+    document.getElementById('card-num-label').innerText = `#${res.card_num}`;
   }
 }
 
@@ -507,14 +570,13 @@ document.getElementById('bingo-btn').onclick = async () => {
   const res = await api('/api/bingo', 'POST', { user_id: USER_ID, room_id: ROOM_ID });
   if (res.ok) {
     tg.showAlert(`🎉 BINGO! አሸንፈሃል! (ካርድ ${res.card_num})`);
-    document.getElementById('winner-section').classList.remove('hidden');
-    document.getElementById('winner-text').innerText = `🎉 ${res.winner} አሸንፏል!`;
+    WINNER_SHOWN = false;
+    loadRoom();
   } else {
     tg.showAlert(res.msg);
   }
 };
 
-// ============ 🔐 ADMIN FUNCTIONS ============
 async function adminCallNumber() {
   const num = prompt('የሚጠራውን ቁጥር አስገባ (1-90):');
   if (!num) return;
@@ -535,7 +597,7 @@ async function adminViewAllCards() {
   if (!res.players) { tg.showAlert('ስህተት'); return; }
   let msg = `🎴 ሁሉም ካርዶች (${res.players.length}):\n\n`;
   res.players.forEach(p => {
-    msg += `👤 ${p.name}\n🎫 ካርድ #${p.card_num}\n${p.approved ? '✅' : '⏳'} ${p.pending ? 'በመጠበቅ' : ''}\n---\n`;
+    msg += `👤 ${p.name}\n🎫 ካርድ #${p.card_num}\n${p.approved ? '✅' : '⏳'}\n---\n`;
   });
   tg.showAlert(msg);
 }
@@ -544,8 +606,7 @@ async function adminForceWin() {
   const targetId = prompt('የአሸናፊውን User ID አስገባ:');
   if (!targetId) return;
   const res = await api('/api/admin/force_win', 'POST', { user_id: USER_ID, room_id: ROOM_ID, target_user_id: parseInt(targetId) });
-  if (res.ok) { showToast('🏆 አሸናፊ ተመርጧል'); loadRoom(); }
-  else { tg.showAlert('ስህተት'); }
+  if (res.ok) { showToast('🏆 አሸናፊ ተመርጧል'); WINNER_SHOWN = false; loadRoom(); }
 }
 
 async function adminSetName() {
@@ -561,18 +622,13 @@ async function adminReset() {
   if (res.ok) { showToast('🔄 ተስተካክሏል'); setTimeout(() => location.reload(), 1000); }
 }
 
-// ============ POLLING ============
 async function poll() {
-  const data = await loadRoom();
-  if (MY_CARD_NUM && data) {
-    await updateMyCard();
-  }
+  await loadRoom();
+  await updateMyCard();
 }
 
-// Init
 if (IS_ADMIN) {
   document.getElementById('admin-panel').classList.remove('hidden');
-  document.getElementById('admin-room').innerText = ROOM_ID;
 }
 
 setInterval(poll, 3000);
