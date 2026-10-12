@@ -1,3 +1,7 @@
-pyTelegramBotAPI
-Flask
+fastapi
+uvicorn
+sqlalchemy
 psycopg2-binary
+pyTelegramBotAPI
+python-dotenv
+pydantic
