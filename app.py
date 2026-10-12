@@ -3,7 +3,8 @@ import random
 import threading
 import time
 import os
-import sqlite3
+import psycopg2
+import psycopg2.extras
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 from threading import Thread, Lock
@@ -12,32 +13,35 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 ADMIN_ID = 5671366303
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 WEBAPP_URL = os.environ.get('WEBAPP_URL', 'https://mybingobot.onrender.com')
-DB_PATH = 'bingo_data.db'
+DATABASE_URL = os.environ.get('DATABASE_URL')  # የ Neon ፅሁፍ ከ Render Environment Variables ይመጣል
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 db_lock = Lock()
 pending_payments = {}
 
-# ================= 💾 DATABASE =================
+# ================= 💾 DATABASE (PostgreSQL) =================
+
+def get_db():
+    return psycopg2.connect(DATABASE_URL)
 
 def init_db():
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        conn = get_db(); c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY, name TEXT, balance INTEGER DEFAULT 0,
-            banned INTEGER DEFAULT 0, referral_code TEXT, referred_by INTEGER DEFAULT 0,
+            user_id BIGINT PRIMARY KEY, name TEXT, balance INTEGER DEFAULT 0,
+            banned INTEGER DEFAULT 0, referral_code TEXT, referred_by BIGINT DEFAULT 0,
             daily_last TEXT, total_wins INTEGER DEFAULT 0, total_games INTEGER DEFAULT 0)''')
         c.execute('''CREATE TABLE IF NOT EXISTS transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, type TEXT,
+            id SERIAL PRIMARY KEY, user_id BIGINT, type TEXT,
             amount INTEGER, status TEXT, note TEXT, date TEXT)''')
         c.execute('''CREATE TABLE IF NOT EXISTS game_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, winner_id INTEGER, winner_name TEXT,
+            id SERIAL PRIMARY KEY, winner_id BIGINT, winner_name TEXT,
             card_num INTEGER, room_id INTEGER, called_count INTEGER, prize INTEGER,
             pattern TEXT, marked TEXT, date TEXT)''')
         c.execute('''CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)''')
         c.execute('''CREATE TABLE IF NOT EXISTS jackpot (id INTEGER PRIMARY KEY CHECK (id = 1), amount INTEGER DEFAULT 0)''')
-        c.execute("INSERT OR IGNORE INTO jackpot (id, amount) VALUES (1, 0)")
+        c.execute("INSERT INTO jackpot (id, amount) VALUES (1, 0) ON CONFLICT (id) DO NOTHING")
         defaults = {
             'price': '50 ብር', 'account': 'CBE 1000123456789', 'call_interval': '5',
             'commission': '15', 'jackpot_percent': '10', 'min_withdraw': '100',
@@ -45,26 +49,26 @@ def init_db():
             'game_name': 'ዘና ቢንጎ ከድጎ', 'win_pattern': 'single', 'game_time_limit': '30'
         }
         for k, v in defaults.items():
-            c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
+            c.execute("INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO NOTHING", (k, v))
         conn.commit(); conn.close()
 
 def db_setting(key, default=''):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("SELECT value FROM settings WHERE key=?", (key,))
+        conn = get_db(); c = conn.cursor()
+        c.execute("SELECT value FROM settings WHERE key=%s", (key,))
         row = c.fetchone(); conn.close()
         return row[0] if row else default
 
 def db_set_setting(key, value):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+        conn = get_db(); c = conn.cursor()
+        c.execute("INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", (key, str(value)))
         conn.commit(); conn.close()
 
 def db_user(uid):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("SELECT user_id, name, balance, banned, referral_code, daily_last, total_wins, total_games FROM users WHERE user_id=?", (uid,))
+        conn = get_db(); c = conn.cursor()
+        c.execute("SELECT user_id, name, balance, banned, referral_code, daily_last, total_wins, total_games FROM users WHERE user_id=%s", (uid,))
         row = c.fetchone(); conn.close()
         if row:
             return {'user_id': row[0], 'name': row[1], 'balance': row[2], 'banned': bool(row[3]),
@@ -73,93 +77,93 @@ def db_user(uid):
 
 def db_new_user(uid, name, ref=0):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        conn = get_db(); c = conn.cursor()
         code = f"REF{uid % 100000}{random.randint(100, 999)}"
-        c.execute("INSERT OR IGNORE INTO users (user_id, name, referral_code, referred_by) VALUES (?, ?, ?, ?)", (uid, name, code, ref))
+        c.execute("INSERT INTO users (user_id, name, referral_code, referred_by) VALUES (%s, %s, %s, %s) ON CONFLICT (user_id) DO NOTHING", (uid, name, code, ref))
         conn.commit(); conn.close()
     return db_user(uid)
 
 def db_update_name(uid, name):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("UPDATE users SET name=? WHERE user_id=?", (name, uid))
+        conn = get_db(); c = conn.cursor()
+        c.execute("UPDATE users SET name=%s WHERE user_id=%s", (name, uid))
         conn.commit(); conn.close()
 
 def db_balance_delta(uid, delta):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("UPDATE users SET balance = balance + ? WHERE user_id=?", (delta, uid))
+        conn = get_db(); c = conn.cursor()
+        c.execute("UPDATE users SET balance = balance + %s WHERE user_id=%s", (delta, uid))
         conn.commit()
-        c.execute("SELECT balance FROM users WHERE user_id=?", (uid,))
+        c.execute("SELECT balance FROM users WHERE user_id=%s", (uid,))
         row = c.fetchone(); conn.close()
         return row[0] if row else 0
 
 def db_set_balance(uid, amount):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("UPDATE users SET balance=? WHERE user_id=?", (amount, uid))
+        conn = get_db(); c = conn.cursor()
+        c.execute("UPDATE users SET balance=%s WHERE user_id=%s", (amount, uid))
         conn.commit(); conn.close()
 
 def db_ban(uid, banned):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("UPDATE users SET banned=? WHERE user_id=?", (1 if banned else 0, uid))
+        conn = get_db(); c = conn.cursor()
+        c.execute("UPDATE users SET banned=%s WHERE user_id=%s", (1 if banned else 0, uid))
         conn.commit(); conn.close()
 
 def db_tx(uid, typ, amount, status='pending', note=''):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("INSERT INTO transactions (user_id, type, amount, status, note, date) VALUES (?, ?, ?, ?, ?, ?)",
+        conn = get_db(); c = conn.cursor()
+        c.execute("INSERT INTO transactions (user_id, type, amount, status, note, date) VALUES (%s, %s, %s, %s, %s, %s)",
                   (uid, typ, amount, status, note, datetime.now().isoformat()))
         conn.commit(); conn.close()
 
 def db_pending_tx():
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        conn = get_db(); c = conn.cursor()
         c.execute("SELECT id, user_id, type, amount, note, date FROM transactions WHERE status='pending' ORDER BY id DESC LIMIT 50")
         rows = c.fetchall(); conn.close()
         return rows
 
 def db_update_tx(tid, status):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("UPDATE transactions SET status=? WHERE id=?", (status, tid))
+        conn = get_db(); c = conn.cursor()
+        c.execute("UPDATE transactions SET status=%s WHERE id=%s", (status, tid))
         conn.commit(); conn.close()
 
 def db_add_game(wid, name, cn, rid, cc, prize, pattern, marked):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("INSERT INTO game_history (winner_id, winner_name, card_num, room_id, called_count, prize, pattern, marked, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        conn = get_db(); c = conn.cursor()
+        c.execute("INSERT INTO game_history (winner_id, winner_name, card_num, room_id, called_count, prize, pattern, marked, date) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                   (wid, name, cn, rid, cc, prize, pattern, marked, datetime.now().isoformat()))
-        c.execute("UPDATE users SET total_wins = total_wins + 1 WHERE user_id=?", (wid,))
+        c.execute("UPDATE users SET total_wins = total_wins + 1 WHERE user_id=%s", (wid,))
         c.execute("UPDATE users SET total_games = total_games + 1")
         conn.commit(); conn.close()
 
 def db_history(limit=20):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("SELECT winner_name, card_num, room_id, called_count, prize, pattern, marked, date FROM game_history ORDER BY id DESC LIMIT ?", (limit,))
+        conn = get_db(); c = conn.cursor()
+        c.execute("SELECT winner_name, card_num, room_id, called_count, prize, pattern, marked, date FROM game_history ORDER BY id DESC LIMIT %s", (limit,))
         rows = c.fetchall(); conn.close()
         return rows
 
 def db_leaders(limit=10):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("SELECT name, total_wins, total_games FROM users ORDER BY total_wins DESC LIMIT ?", (limit,))
+        conn = get_db(); c = conn.cursor()
+        c.execute("SELECT name, total_wins, total_games FROM users ORDER BY total_wins DESC LIMIT %s", (limit,))
         rows = c.fetchall(); conn.close()
         return rows
 
 def db_jackpot():
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        conn = get_db(); c = conn.cursor()
         c.execute("SELECT amount FROM jackpot WHERE id=1")
         row = c.fetchone(); conn.close()
         return row[0] if row else 0
 
 def db_jackpot_add(amount):
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("UPDATE jackpot SET amount = amount + ? WHERE id=1", (amount,))
+        conn = get_db(); c = conn.cursor()
+        c.execute("UPDATE jackpot SET amount = amount + %s WHERE id=1", (amount,))
         conn.commit()
         c.execute("SELECT amount FROM jackpot WHERE id=1")
         row = c.fetchone(); conn.close()
@@ -167,13 +171,13 @@ def db_jackpot_add(amount):
 
 def db_jackpot_reset():
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        conn = get_db(); c = conn.cursor()
         c.execute("UPDATE jackpot SET amount=0 WHERE id=1")
         conn.commit(); conn.close()
 
 def db_all_users():
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        conn = get_db(); c = conn.cursor()
         c.execute("SELECT user_id FROM users WHERE banned=0")
         rows = [r[0] for r in c.fetchall()]; conn.close()
         return rows
@@ -416,8 +420,8 @@ def api_daily():
     bonus = int(db_setting('daily_bonus', '10'))
     db_balance_delta(uid, bonus)
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("UPDATE users SET daily_last=? WHERE user_id=?", (today, uid))
+        conn = get_db(); c = conn.cursor()
+        c.execute("UPDATE users SET daily_last=%s WHERE user_id=%s", (today, uid))
         conn.commit(); conn.close()
     db_tx(uid, 'daily_bonus', bonus, 'completed', 'የቀን ስጦታ')
     return jsonify({'ok': True, 'bonus': bonus, 'msg': f'🎁 +{bonus} ብር የቀን ስጦታ! 💚'})
@@ -736,7 +740,7 @@ def adm_stats():
     d = request.json
     if not is_admin(d): return jsonify({'error': 'unauthorized'}), 403
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        conn = get_db(); c = conn.cursor()
         c.execute("SELECT COUNT(*), COALESCE(SUM(balance),0) FROM users")
         tu, tb = c.fetchone()
         c.execute("SELECT COUNT(*) FROM game_history")
@@ -846,8 +850,8 @@ def cmd_daily(msg):
     bonus = int(db_setting('daily_bonus', '10'))
     db_balance_delta(uid, bonus)
     with db_lock:
-        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-        c.execute("UPDATE users SET daily_last=? WHERE user_id=?", (today, uid))
+        conn = get_db(); c = conn.cursor()
+        c.execute("UPDATE users SET daily_last=%s WHERE user_id=%s", (today, uid))
         conn.commit(); conn.close()
     bot.reply_to(msg, f"🎁 +{bonus} ብር! 💚")
 
