@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import os
@@ -50,6 +51,11 @@ class BuyCardRequest(BaseModel):
 
 @app.get("/")
 def read_root():
+    # ይህ ተጫዋቾች ሲገቡ የHTML ገጹን እንዲያዩ ያደርጋል
+    return FileResponse("templates/index.html")
+
+@app.get("/api/status")
+def api_status():
     return {"message": "የቢንጎ ጨዋታ ጀርባ ስርዓት እየሰራ ነው!"}
 
 # 1. የተጠቃሚ መረጃ ማግኘት
@@ -144,7 +150,7 @@ def approve_deposit(transaction_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "ግብይቱ በተሳካ ሁኔታ ጸድቋል!", "new_balance": user.balance}
 
-# የቦቱን ስራ በተ parallel ማስኬድ
+# የቦቱን ስራ በ parallel ማስኬድ
 @app.on_event("startup")
 def startup_event():
     thread = threading.Thread(target=run_bot)
