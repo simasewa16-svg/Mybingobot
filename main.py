@@ -1,12 +1,14 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v6.8 FINAL
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v6.9 FINAL
 =====================================================================
 ✅ P0: original_jackpot ለ recover_game
+✅ P0: recover_game original_jackpot=0 fallback
+✅ P1: get_or_create_current_game ያለ rollback (savepoints እንዲቆዩ)
 ✅ P1: reconcile() refunded cards
 ✅ P1: validate_schema() rollover_transferred + original_jackpot
 ✅ P1: parse_called_numbers() malformed reject
-✅ P1: type(n) is not int (bool ይከላከላል)
+✅ P1: type(n) is not int
 ✅ P1: with_for_update() on prev_game
 ✅ startup_event auto-migration
 ✅ secure_random.choice ለጨዋታ ቁጥሮች
@@ -398,7 +400,8 @@ def get_or_create_current_game(db: Session = Depends(get_db)):
         if datetime.now(timezone.utc) - game.created_at > timedelta(minutes=WAITING_TIMEOUT_MINUTES):
             _, is_complete = _cancel_game_with_refund(db, game.id)
             if not is_complete:
-                db.rollback()
+                # ✅ የተሳኩት ካርዶች እንዲቆዩ — db.rollback() አይጠራም
+                logger.critical(f"Game {game.id} refund INCOMPLETE. Partial refunds kept.")
                 raise HTTPException(status_code=503, detail="የቀድሞ ጨዋታ ገንዘብ መመለስ አልተሟላም።")
             game = None
 
@@ -697,6 +700,15 @@ def recover_game(game_id: int,
 
     payout_total = sum(Decimal(str(p.amount)) for p in payouts)
     expected_jackpot = Decimal(str(game.original_jackpot or "0.00"))
+
+    # ✅ original_jackpot ዜሮ ከሆነ — ያረጀ ጨዋታ ሊሆን ይችላል
+    if expected_jackpot == Decimal("0.00") and payout_total > Decimal("0.00"):
+        logger.warning(
+            f"Game {game.id} has payouts but original_jackpot=0. "
+            f"Assuming jackpot = payout_total for recovery."
+        )
+        expected_jackpot = payout_total
+
     jackpot_match = payout_total == expected_jackpot
 
     winner_issues = []
