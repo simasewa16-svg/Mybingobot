@@ -1,6 +1,6 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v2.0
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v2.1
 =====================================================================
 ዋና የደህንነት መርሆች፦
 1. ሁሉም የገንዘብ ሥራዎች Atomic (Savepoint)
@@ -8,9 +8,10 @@
 3. Row-level Locking (with_for_update)
 4. Advisory Lock አንድ ንቁ ጨዋታ ብቻ
 5. Audit Log ለሁሉም Admin ድርጊቶች
-6. ✅ Payout Atomicity - Payout plan አንድ ጊዜ ይሰላል፣ ሁሉም አሸናፊዎች አብረው ይከፈላሉ
+6. ✅ Payout Atomicity - Payout plan አንድ ጊዜ ይሰላል
 7. ✅ Refund Completeness - ሁሉም ካርዶች እስኪመለሱ ድረስ ጨዋታ አይዘጋም
 8. ✅ Correct Routes - /api/game/current/state እና /api/admin/reconcile
+9. ✅ Engine Error Recovery - Transaction ሲበላሽ rollback ያደርጋል
 =====================================================================
 """
 from fastapi import FastAPI, Depends, HTTPException, Header
@@ -153,11 +154,6 @@ class BuyCardRequest(BaseModel):
 def _cancel_game_with_refund(db, game_id: int):
     """
     ✅ ጨዋታ ሰርዞ ገንዘብ መመለስ (Idempotent + Complete)
-
-    🔒 ዋና መርህ፦
-    - ሁሉም ካርዶች እስኪመለሱ ድረስ ጨዋታው refunded አይሆንም
-    - የተመለሱ ካርዶች በራሳቸው flag ይመዘገባሉ
-    - አንድ ካርድ ቢወድቅ ጨዋታ አይዘጋም (ለቀጣይ tick ይተዋል)
     """
     game = lock_game(db, game_id)
     if not game or game.refunded:
@@ -192,7 +188,6 @@ def _cancel_game_with_refund(db, game_id: int):
             refunded_count += 1
 
         except IntegrityError:
-            # ✅ Duplicate refund ledger - አስቀድሞ ተመልሷል
             nested.rollback()
             existing = db.query(models.LedgerEntry).filter(
                 models.LedgerEntry.user_id == card.user_id,
@@ -212,7 +207,6 @@ def _cancel_game_with_refund(db, game_id: int):
             failed_count += 1
             logger.error(f"Refund error for card {card.id}: {e}")
 
-    # ✅ ሁሉም ካርዶች ከተመለሱ ብቻ ጨዋታውን ዝጋ
     total_cards = db.query(models.Card).filter(
         models.Card.game_id == game_id
     ).count()
@@ -222,19 +216,16 @@ def _cancel_game_with_refund(db, game_id: int):
     ).count()
 
     if total_cards == 0:
-        # ✅ ካርድ የሌለው ጨዋታ - ወዲያውኑ ዝጋ
         game.refunded = True
         game.status = "cancelled"
         game.finished_at = datetime.utcnow()
         logger.info(f"Game {game_id}: no cards, closed immediately.")
     elif refunded_total == total_cards:
-        # ✅ ሁሉም ተመልሷል - ጨዋታውን ዝጋ
         game.refunded = True
         game.status = "cancelled"
         game.finished_at = datetime.utcnow()
         logger.info(f"Game {game_id}: all {refunded_count} cards refunded. Game cancelled.")
     else:
-        # ⚠️ አንዳንድ ካርዶች አልተመለሱም - ጨዋታ አይዘጋም
         logger.warning(
             f"Game {game_id}: only {refunded_total}/{total_cards} cards refunded. "
             f"Will retry next tick."
@@ -252,7 +243,7 @@ def read_root():
 def api_status():
     return {"message": "የቢንጎ ጨዋታ ጀርባ ስርዓት እየሰራ ነው!"}
 
-# ✅ 1. የአሁኑ ጨዋታ (Race-safe) - /api/game/current/state
+# ✅ 1. የአሁኑ ጨዋታ - /api/game/current/state
 @app.get("/api/game/current/state")
 def get_or_create_current_game(db: Session = Depends(get_db)):
     db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": GAME_CREATE_LOCK_ID})
@@ -322,7 +313,7 @@ def get_my_card(game_id: int, user: models.User = Depends(get_current_user), db:
         "is_winner": card.is_winner
     }
 
-# ✅ 2. የክፍያ ጥያቄ (IntegrityError ጠባቂ)
+# ✅ 2. የክፍያ ጥያቄ
 @app.post("/api/deposit")
 def request_deposit(req: DepositRequest, user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     if req.method not in ["ቴሌብር", "ሲቢኢ ብር"]:
@@ -346,7 +337,7 @@ def request_deposit(req: DepositRequest, user: models.User = Depends(get_current
         raise HTTPException(status_code=400, detail="ይህ የደረሰኝ ቁጥር ተጠቅሟል!")
     return {"message": "የክፍያ ጥያቄዎ ተልኳል።"}
 
-# ✅ 3. ካርድ መግዛት (Atomic + Savepoint)
+# ✅ 3. ካርድ መግዛት
 @app.post("/api/buy_card")
 def buy_card(req: BuyCardRequest, user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     game = lock_game(db, req.game_id)
@@ -510,7 +501,7 @@ def reject_deposit(transaction_id: int, admin: models.User = Depends(require_adm
     db.commit()
     return {"message": "ተከልክሏል!"}
 
-# ✅ 4. Reconciliation - /api/admin/reconcile (ትክክለኛው route + admin required)
+# ✅ 4. Reconciliation
 @app.get("/api/admin/reconcile")
 def reconcile(admin: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     users = db.query(models.User).all()
@@ -533,41 +524,102 @@ def reconcile(admin: models.User = Depends(require_admin), db: Session = Depends
         "mismatches": mismatches
     }
 
-# ==================== Bingo Engine ====================
+# ==================== Bingo Engine (✅ v2.1 - Error Recovery) ====================
 def bingo_engine_loop():
+    """
+    ✅ የBingo engine loop - Error Recovery ያለው
+    
+    🔒 ዋና መርህ፦
+    - process_engine_tick ሲወድቅ → rollback ያደርጋል
+    - Transaction ሲበላሽ → unlock አይሞክርም
+    - Loop ፈጽሞ አይቋረጥም
+    - ስህተቶች ይመዘገባሉ ግን ስርዓቱ ይቀጥላል
+    """
     while True:
         try:
             time.sleep(DRAW_INTERVAL_SECONDS)
-            db = SessionLocal()
+        except Exception as e:
+            logger.error(f"Sleep error: {e}")
+            continue
+
+        db = SessionLocal()
+        got_lock = False
+
+        try:
+            # ✅ Lock ለመያዝ ሞክር
             try:
                 got_lock = db.execute(
                     text("SELECT pg_try_advisory_lock(:id)"),
                     {"id": ENGINE_LOCK_ID}
                 ).scalar()
-                if not got_lock:
-                    db.close()
-                    continue
+            except Exception as lock_error:
+                logger.error(f"Lock acquisition error: {lock_error}")
                 try:
-                    process_engine_tick(db)
-                finally:
-                    db.execute(
-                        text("SELECT pg_advisory_unlock(:id)"),
-                        {"id": ENGINE_LOCK_ID}
-                    )
-                    db.commit()
-            finally:
+                    db.rollback()
+                except Exception:
+                    pass
                 db.close()
-        except Exception as e:
-            logger.error(f"Bingo engine error: {e}")
+                continue
+
+            # ✅ ሌላ ሰርቨር ይዞታል - ምንም አታድርግ
+            if not got_lock:
+                db.close()
+                continue
+
+            # ✅ ዋናው ስራ
+            try:
+                process_engine_tick(db)
+                db.commit()
+            except Exception as tick_error:
+                # ✅ Transaction መልስ - ይህ ወሳኝ ነው!
+                try:
+                    db.rollback()
+                except Exception as rb_error:
+                    logger.error(f"Rollback error: {rb_error}")
+                logger.error(f"Engine tick error (rolled back): {tick_error}")
+
+            # ✅ Lock ን ለቅቅ (transaction ጤናማ ሁኔታ ላይ ከሆነ)
+            try:
+                db.execute(
+                    text("SELECT pg_advisory_unlock(:id)"),
+                    {"id": ENGINE_LOCK_ID}
+                )
+                db.commit()
+            except Exception as unlock_error:
+                # Unlock ካልተሳካ - transaction መልስ ሞክር
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                logger.error(f"Unlock error: {unlock_error}")
+
+        except Exception as fatal_error:
+            # ✅ ውጫዊ ስህተት - ሁሉንም አጽዳ
+            logger.error(f"Engine fatal error: {fatal_error}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+        finally:
+            # ✅ ሁልጊዜ session ዝጋ
+            try:
+                db.close()
+            except Exception:
+                pass
 
 
 def process_engine_tick(db):
+    """
+    ✅ አንድ የጨዋታ ዑደት (tick)
+    ⚠️ ይህ ተግባር ስህተት ሊፈጥር ይችላል - በ bingo_engine_loop ይያዛል
+    """
+    # የቆዩ waiting ጨዋታዎችን አጽዳ
     old_games = db.query(models.Game).filter(models.Game.status == "waiting").all()
     for og in old_games:
         if og.created_at and datetime.utcnow() - og.created_at > timedelta(minutes=WAITING_TIMEOUT_MINUTES):
             _cancel_game_with_refund(db, og.id)
-    db.commit()
 
+    # የሚጫወቱ ጨዋታዎችን አምጣ
     games = db.query(models.Game).filter(
         models.Game.status == "playing"
     ).with_for_update().all()
@@ -582,13 +634,11 @@ def process_engine_tick(db):
 
         if len(called_list) >= MAX_NUMBERS:
             _finish_game_no_winner(db, game)
-            db.commit()
             continue
 
         available = [n for n in range(1, MAX_NUMBERS + 1) if n not in called_list]
         if not available:
             _finish_game_no_winner(db, game)
-            db.commit()
             continue
 
         new_num = random.choice(available)
@@ -599,7 +649,6 @@ def process_engine_tick(db):
         game.last_drawn_at = datetime.utcnow()
 
         check_winners(db, game, set(called_list))
-        db.commit()
 
 
 def _finish_game_no_winner(db, game):
@@ -615,12 +664,6 @@ def _finish_game_no_winner(db, game):
 def check_winners(db, game, called_set):
     """
     ✅ የBingo ድል ማረጋገጫ + Atomic Idempotent Payout
-
-    🔒 ዋና የደህንነት መርህ፦
-    - Payout plan አንድ ጊዜ ብቻ ይሰላል (Recomputation የለም!)
-    - ሁሉም አሸናፊዎች በአንድ Atomic Transaction ይከፈላሉ
-    - አንዱ ካልተሳካ → ሁሉም rollback → በቀጣይ tick ይሞክራል
-    - የቀድሞ ክፍያ ካለ በ plan ውስጥ ይታወቃል (ድግግሞሽ አይፈጽምም)
     """
     if game.payout_completed:
         return
@@ -666,8 +709,6 @@ def check_winners(db, game, called_set):
         return
 
     # ============ 2. የቀድሞ ክፍያዎችን ፈልግ (Idempotency) ============
-    # ✅ ይህ ዋናው P0 fix ነው!
-    # የቀድሞ ክፍያ ያላቸውን ካርዶች ለይተን ማውጣት
     already_paid_cards = []
     unpaid_cards = []
     
@@ -683,19 +724,15 @@ def check_winners(db, game, called_set):
         else:
             unpaid_cards.append(card)
 
-    # የቀድሞ ክፍያ ያላቸውን ብቻ ምልክት አድርግ
     for card in already_paid_cards:
         card.is_winner = True
 
     if not unpaid_cards:
-        # ሁሉም አስቀድመው ተከፍለዋል
         return
 
     # ============ 3. ለዘለቀው ካርዶች ብቻ አዲስ Payout Plan ስላ ============
-    # ✅ ቀድሞ የተከፈላቸውን ሳይጨምር ስሌት
     total_jackpot = game.jackpot or Decimal("0.00")
     
-    # ቀድሞ የተከፈለውን መጠን ቀንስ
     already_paid_amount = Decimal("0.00")
     for card in already_paid_cards:
         entry = db.query(models.LedgerEntry).filter(
@@ -707,7 +744,6 @@ def check_winners(db, game, called_set):
         if entry:
             already_paid_amount += entry.amount
 
-    # ለቀሪዎቹ የሚከፋፈለው ጠቅላላ
     remaining_jackpot = total_jackpot - already_paid_amount
     if remaining_jackpot < 0:
         remaining_jackpot = Decimal("0.00")
@@ -725,62 +761,45 @@ def check_winners(db, game, called_set):
         payout_plan.append((card, amount))
 
     # ============ 4. ሁሉንም በአንድ Atomic Transaction ክፈል ============
-    try:
-        for card, amount in payout_plan:
-            if amount <= 0:
-                raise ValueError(f"Invalid payout for card {card.id}: {amount}")
+    for card, amount in payout_plan:
+        if amount <= 0:
+            raise ValueError(f"Invalid payout for card {card.id}: {amount}")
 
-            w = lock_user(db, card.user_id)
-            if not w:
-                raise ValueError(f"Winner user {card.user_id} not found")
+        w = lock_user(db, card.user_id)
+        if not w:
+            raise ValueError(f"Winner user {card.user_id} not found")
 
-            w.balance = w.balance + amount
-            add_ledger(
-                db, w, "prize_payout", amount,
-                ref_type="game", ref_id=game.id,
-                notes=f"payout for card {card.id} of game {game.id}"
-            )
-            card.is_winner = True
+        w.balance = w.balance + amount
+        add_ledger(
+            db, w, "prize_payout", amount,
+            ref_type="game", ref_id=game.id,
+            notes=f"payout for card {card.id} of game {game.id}"
+        )
+        card.is_winner = True
 
-        # ============ 5. ሁሉም ከተከፈሉ በኋላ ጨዋታውን ዝጋ ============
-        # ሁሉም ካርዶች አሸናፊ መሆናቸውን አረጋግጥ
-        all_winner_count = db.query(models.Card).filter(
-            models.Card.game_id == game.id,
-            models.Card.is_winner == True
-        ).count()
-        
-        # ✅ የጠቅላላ ክፍያ ድምር ከ jackpot ጋር ማመሳከር
-        all_payouts = db.query(models.LedgerEntry).filter(
-            models.LedgerEntry.entry_type == "prize_payout",
-            models.LedgerEntry.reference_type == "game",
-            models.LedgerEntry.reference_id == str(game.id)
-        ).with_entities(models.LedgerEntry.amount).all()
-        total_paid = sum((row[0] for row in all_payouts), Decimal("0.00"))
-        
-        if total_paid >= total_jackpot:
-            # ✅ ጠቅላላ ክፍያ ከ jackpot ጋር እኩል ወይም የበለጠ - ጨዋታውን ዝጋ
-            game.status = "finished"
-            game.finished_at = datetime.utcnow()
-            game.winner_id = unpaid_cards[0].user_id if unpaid_cards else already_paid_cards[0].user_id
-            game.payout_completed = True
-            game.jackpot = Decimal("0.00")
-            db.commit()
-            logger.info(
-                f"Game {game.id}: payout complete. "
-                f"Total paid={total_paid}, jackpot={total_jackpot}"
-            )
-        else:
-            # አልተጠናቀቀም - በቀጣይ tick ይሞክራል
-            db.commit()
-            logger.info(
-                f"Game {game.id}: partial payout. "
-                f"Total paid={total_paid}, jackpot={total_jackpot}. Will continue."
-            )
-
-    except Exception as e:
-        # ✅ ሁሉም rollback - በሚቀጥለው tick እንደገና ይሞክራል
-        db.rollback()
-        logger.error(f"Payout failed for game {game.id}: {e}. Will retry next tick.")
+    # ============ 5. ሁሉም ከተከፈሉ በኋላ ጨዋታውን ዝጋ ============
+    all_payouts = db.query(models.LedgerEntry).filter(
+        models.LedgerEntry.entry_type == "prize_payout",
+        models.LedgerEntry.reference_type == "game",
+        models.LedgerEntry.reference_id == str(game.id)
+    ).with_entities(models.LedgerEntry.amount).all()
+    total_paid = sum((row[0] for row in all_payouts), Decimal("0.00"))
+    
+    if total_paid >= total_jackpot:
+        game.status = "finished"
+        game.finished_at = datetime.utcnow()
+        game.winner_id = unpaid_cards[0].user_id if unpaid_cards else already_paid_cards[0].user_id
+        game.payout_completed = True
+        game.jackpot = Decimal("0.00")
+        logger.info(
+            f"Game {game.id}: payout complete. "
+            f"Total paid={total_paid}, jackpot={total_jackpot}"
+        )
+    else:
+        logger.info(
+            f"Game {game.id}: partial payout. "
+            f"Total paid={total_paid}, jackpot={total_jackpot}. Will continue."
+        )
 
 
 # ==================== Startup ====================
