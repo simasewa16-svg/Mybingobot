@@ -9,8 +9,10 @@ const API_BASE_URL = "https://mybingobot-1.onrender.com";
 
 // የተጠቃሚውን መታወቂያ ማግኘት
 const telegramUser = tg.initDataUnsafe?.user;
-const userId = telegramUser ? telegramUser.id.toString() : "123456789"; // ለሙከራ የተቀመጠ ቁጥር
-
+// የተጠቃሚውን መታወቂያ በትክክል ማግኘት
+const telegramUser = tg.initDataUnsafe?.user;
+const userId = telegramUser ? telegramUser.id.toString() : "123456789"; 
+// ማሳሰቢያ፦ "123456789" የሚለው ለሙከራ ብቻ ነው። በእውነተኛ ቴሌግራም ውስጥ ሲከፈት የተጠቃሚውን እውነተኛ ID ይወስዳል።
 let currentGameId = 1; // የጨዋታው መታወቂያ (ለሙከራ)
 let cardPrice = 10; // የአንድ ካርድ ዋጋ 10 ብር
 
