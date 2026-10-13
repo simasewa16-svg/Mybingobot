@@ -10,24 +10,20 @@
         body { background-color: #f3e5f5; padding: 10px; color: #333; min-height: 100vh; }
         .app-container { max-width: 800px; margin: auto; display: flex; flex-direction: column; gap: 10px; padding-bottom: 80px; }
 
-        /* ራስጌ */
         .top-header { background: linear-gradient(135deg, #6a1b9a, #ab47bc); color: white; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 2px 8px rgba(106,27,154,0.3); }
         .top-header h1 { font-size: 18px; margin-bottom: 5px; }
         .balance-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 8px; }
         .btn-deposit { background: #4caf50; color: white; border: none; padding: 6px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 13px; }
         .btn-deposit:active { transform: scale(0.96); }
 
-        /* ስታቲስቲክስ */
         .stats-grid { display: flex; justify-content: space-between; background: #fff; padding: 10px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); }
         .stat-box { text-align: center; font-size: 11px; color: #666; flex: 1; border-right: 1px solid #f0f0f0; }
         .stat-box:last-child { border-right: none; }
         .stat-box b { display: block; font-size: 16px; color: #6a1b9a; margin-top: 4px; font-weight: 700; }
 
-        /* የጨዋታ አካባቢ */
         .game-area { display: flex; flex-direction: row; gap: 10px; }
         @media (max-width: 600px) { .game-area { flex-direction: column; } }
 
-        /* የቢንጎ ካርድ */
         .bingo-card { flex: 1; background: #fff; padding: 10px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); }
         .card-headers { display: grid; grid-template-columns: repeat(5, 1fr); text-align: center; font-weight: bold; font-size: 22px; margin-bottom: 6px; }
         .card-headers div:nth-child(1) { color: #2e7d32; }
@@ -42,7 +38,6 @@
         .cell.winning { background: #d32f2f; color: white; }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
-        /* የጥሪ አካባቢ */
         .call-area { flex: 1; display: flex; flex-direction: column; gap: 10px; }
         .current-call-box { background: #6a1b9a; color: white; padding: 15px; border-radius: 15px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(106,27,154,0.3); }
         .current-call-box span { font-size: 13px; margin-bottom: 8px; opacity: 0.9; }
@@ -51,7 +46,6 @@
         .recent-calls { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; min-height: 45px; }
         .recent-calls .small-circle { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; color: white; background: #ff9800; box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
 
-        /* የጨዋታ ሁኔታ */
         .game-status { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 10px 15px; border-radius: 10px; font-size: 13px; font-weight: bold; }
         .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; }
         .status-waiting { background: #fff3e0; color: #e65100; }
@@ -60,13 +54,11 @@
 
         .message-box { background: #f3e5f5; border: 2px solid #ce93d8; padding: 18px; border-radius: 10px; text-align: center; color: #6a1b9a; font-weight: bold; font-size: 13px; line-height: 1.5; }
 
-        /* የታችኛው ቁልፎች */
         .bottom-nav { display: flex; gap: 8px; margin-top: 10px; position: fixed; bottom: 0; left: 0; right: 0; padding: 10px; background: linear-gradient(to top, #f3e5f5 80%, transparent); max-width: 800px; margin: 0 auto; }
         .nav-btn { flex: 1; background: #7b1fa2; color: white; border: none; padding: 14px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 8px rgba(123,31,162,0.3); }
         .nav-btn:active { transform: scale(0.97); }
         .nav-btn:disabled { background: #bdbdbd; cursor: not-allowed; }
 
-        /* ሞዳሎች */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; padding: 15px; }
         .modal-overlay.show { display: flex; }
         .modal-box { background: white; width: 100%; max-width: 420px; padding: 20px; border-radius: 15px; text-align: center; max-height: 85vh; overflow-y: auto; }
@@ -81,26 +73,42 @@
         .close-btn { background: #e0e0e0; color: #333; border: none; padding: 12px 24px; border-radius: 8px; margin-top: 10px; cursor: pointer; font-weight: bold; }
         .close-btn:active { transform: scale(0.97); }
 
-        /* የAdmin ፓነል */
         .admin-panel-btn { position: fixed; bottom: 90px; right: 15px; background: #d32f2f; color: white; border: none; padding: 14px; border-radius: 50%; font-size: 22px; box-shadow: 0 4px 12px rgba(211,47,47,0.4); cursor: pointer; display: none; z-index: 999; }
+        
+        .badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: #d32f2f;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 12px;
+            font-weight: bold;
+            min-width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .hidden { display: none !important; }
+
         .admin-item { border: 1px solid #e0e0e0; padding: 12px; margin-bottom: 12px; border-radius: 10px; text-align: left; font-size: 13px; background: #fafafa; }
         .admin-item b { color: #6a1b9a; }
         .admin-item p { margin-bottom: 4px; font-size: 13px; }
         .approve-btn { background: #4caf50; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; margin-top: 6px; width: 100%; font-weight: bold; }
         .reject-btn { background: #d32f2f; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; margin-top: 6px; width: 100%; font-weight: bold; }
 
-        /* Toast notification */
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #323232; color: white; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 2000; opacity: 0; transition: opacity 0.3s; max-width: 90%; }
         .toast.show { opacity: 1; }
 
-        /* Loading */
         .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div class="app-container">
-        <!-- ራስጌ -->
         <div class="top-header">
             <h1>🎰 ሃ ቡንላ ከድራ!</h1>
             <div class="balance-bar">
@@ -109,7 +117,6 @@
             </div>
         </div>
 
-        <!-- ስታቲስቲክስ -->
         <div class="stats-grid">
             <div class="stat-box">👥 Players<b id="players-count">0</b></div>
             <div class="stat-box">🎯 Derash<b id="derash-amount">0</b></div>
@@ -117,7 +124,6 @@
             <div class="stat-box">📢 Call Count<b id="call-count">0</b></div>
         </div>
 
-        <!-- የጨዋታ አካባቢ -->
         <div class="game-area">
             <div class="bingo-card">
                 <div class="card-headers"><div>B</div><div>I</div><div>N</div><div>G</div><div>O</div></div>
@@ -143,7 +149,6 @@
             </div>
         </div>
 
-        <!-- የታችኛው ቁልፎች -->
         <div class="bottom-nav">
             <button class="nav-btn" id="buy-card-btn" onclick="buyCard()">🎫 ካርድ ግዛ</button>
             <button class="nav-btn" onclick="showToast('በቅርቡ ይመጣል!')">🏆 ሰንጠረዥ</button>
@@ -151,7 +156,6 @@
         </div>
     </div>
 
-    <!-- የክፍያ ሞዳል -->
     <div class="modal-overlay" id="depositModal">
         <div class="modal-box">
             <h2>💳 ባላንስ ለመሙላት</h2>
@@ -166,7 +170,6 @@
         </div>
     </div>
 
-    <!-- የAdmin ሞዳል -->
     <div class="modal-overlay" id="adminModal">
         <div class="modal-box">
             <h2>⚙️ የአስተዳዳሪ ፓነል</h2>
@@ -175,28 +178,33 @@
         </div>
     </div>
 
-    <!-- የAdmin ተንሳፋፊ ቁልፍ -->
-    <button class="admin-panel-btn" id="adminPanelBtn" onclick="openAdminPanel()">⚙️</button>
+    <button class="admin-panel-btn" id="adminPanelBtn" onclick="openAdminPanel()">
+        ⚙️
+        <span id="admin-badge" class="badge hidden">0</span>
+    </button>
 
-    <!-- Toast -->
     <div class="toast" id="toast"></div>
 
     <script>
-        // ==================== ማዋቀሪያ ====================
         const tg = window.Telegram.WebApp;
         tg.expand();
         tg.ready();
 
         const API_BASE_URL = "https://mybingobot-1.onrender.com";
+        const MAX_DEPOSIT = 50000; 
 
         let currentGameId = null;
+        let currentGameStatus = null; 
         let cardPrice = 10;
         let myCardNumbers = [];
         let lastCalledNumber = null;
         let isAdmin = false;
         let isBuying = false;
+        let isPolling = true; 
+        let loadGameRequestId = 0; 
+        let gameStateRequestId = 0; 
+        let toastTimer = null; 
 
-        // ==================== Helpers ====================
         function authHeaders() {
             return {
                 'Content-Type': 'application/json',
@@ -208,7 +216,11 @@
             const t = document.getElementById('toast');
             t.innerText = msg;
             t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), duration);
+
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                t.classList.remove('show');
+            }, duration);
         }
 
         function setStatusBadge(status) {
@@ -228,69 +240,178 @@
                 badge.innerText = 'ተሰርዟል';
             } else {
                 badge.classList.add('status-waiting');
-                badge.innerText = status || 'በመጠበቅ';
+                badge.innerText = 'በመጠበቅ';
             }
         }
 
-        // ==================== 1. የአሁኑ ጨዋታ ====================
+        function updateBuyButton() {
+            const btn = document.getElementById('buy-card-btn');
+            if (!btn) return;
+
+            const waiting = currentGameStatus === 'waiting';
+            const hasCard = myCardNumbers.length > 0;
+
+            if (isBuying) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="loading"></span>';
+            } else if (hasCard) {
+                btn.disabled = true;
+                btn.innerText = "✅ ካርድ አለዎት";
+            } else if (!waiting) {
+                btn.disabled = true;
+                btn.innerText = currentGameStatus === null ? "በመጫን ላይ..." : "🎫 ጨዋታ ተጀምሯል";
+            } else {
+                btn.disabled = false;
+                btn.innerText = "🎫 ካርድ ግዛ";
+            }
+        }
+
         async function loadCurrentGame() {
+            const reqId = ++loadGameRequestId; 
             try {
-                const res = await fetch(`${API_BASE_URL}/api/game/current`);
+                const res = await fetch(`${API_BASE_URL}/api/game/current/state`);
                 if (!res.ok) throw new Error("Failed");
                 const data = await res.json();
+                
+                if (reqId !== loadGameRequestId) return false; 
+
                 if (data.id) {
-                    currentGameId = data.id;
+                    if (currentGameId !== data.id) {
+                        currentGameId = data.id;
+                        currentGameStatus = null; 
+                        myCardNumbers = [];
+                        lastCalledNumber = null;
+                        
+                        // ✅ 2. የቆዩ ስታቲስቲክሶችን አጽዳ
+                        document.getElementById('players-count').innerText = '0';
+                        document.getElementById('derash-amount').innerText = '0';
+                        document.getElementById('call-count').innerText = '0';
+                        document.getElementById('bet-amount').innerText = data.card_price || 10;
+                        document.getElementById('status-message').innerText = '⏳ የጨዋታ መረጃ በመጫን ላይ...';
+                        setStatusBadge('waiting');
+                        
+                        document.getElementById('bingo-grid').innerHTML = `
+                            <div style="grid-column: 1/-1; text-align: center; padding: 40px 10px; color: #999; font-size: 13px;">
+                                🎫 ካርድ ለመግዛት ከታች "ካርድ ግዛ" ን ተጭነው/ቺው
+                            </div>`;
+                        document.getElementById('recent-calls').innerHTML = '';
+                        document.getElementById('current-call').innerText = '-';
+                        
+                        updateBuyButton();
+                    }
                     cardPrice = data.card_price || 10;
                     return true;
+                } else {
+                    if (currentGameId !== null) {
+                        currentGameId = null;
+                        currentGameStatus = null;
+                        myCardNumbers = [];
+                        lastCalledNumber = null;
+                        
+                        document.getElementById('bingo-grid').innerHTML = `
+                            <div style="grid-column: 1/-1; text-align: center; padding: 40px 10px; color: #999; font-size: 13px;">
+                                ⏳ አዲስ ጨዋታ በመጠበቅ ላይ...
+                            </div>`;
+                        document.getElementById('recent-calls').innerHTML = '';
+                        document.getElementById('current-call').innerText = '-';
+                        document.getElementById('players-count').innerText = '0';
+                        document.getElementById('derash-amount').innerText = '0';
+                        document.getElementById('call-count').innerText = '0';
+                        document.getElementById('bet-amount').innerText = '10';
+                        document.getElementById('status-message').innerText = '⏳ አዲስ ጨዋታ በመጠበቅ ላይ...';
+                        document.getElementById('game-status-badge').innerText = 'በመጠበቅ';
+
+                        updateBuyButton();
+                    }
+                    return false;
                 }
             } catch (e) {
                 console.error("loadCurrentGame:", e);
-                showToast("ጨዋታ ማምጣት አልተቻለም");
             }
             return false;
         }
 
-        // ==================== 2. የእኔ መረጃ ====================
         async function fetchMe() {
             try {
                 const res = await fetch(`${API_BASE_URL}/api/me`, { headers: authHeaders() });
                 if (!res.ok) return;
                 const data = await res.json();
                 document.getElementById('user-balance').innerText = data.balance + " ብር";
-                if (data.is_admin) {
-                    isAdmin = true;
-                    document.getElementById('adminPanelBtn').style.display = 'block';
+                
+                isAdmin = data.is_admin === true;
+                document.getElementById('adminPanelBtn').style.display = isAdmin ? 'block' : 'none';
+
+                if (isAdmin) {
+                    updateAdminBadge();
+                } else {
+                    document.getElementById('admin-badge').classList.add('hidden');
                 }
             } catch (e) { console.error("fetchMe:", e); }
         }
 
-        // ==================== 3. የእኔ ካርድ ====================
-        async function fetchMyCard() {
-            if (!currentGameId) return;
+        async function updateAdminBadge() {
+            if (!isAdmin) return;
             try {
-                const res = await fetch(`${API_BASE_URL}/api/my_card/${currentGameId}`, { headers: authHeaders() });
+                const res = await fetch(`${API_BASE_URL}/api/admin/pending`, { headers: authHeaders() });
                 if (!res.ok) return;
                 const data = await res.json();
+                const badge = document.getElementById('admin-badge');
+                const count = Array.isArray(data?.pending) ? data.pending.length : 0;
+                
+                if (count > 0) {
+                    badge.innerText = count;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            } catch (e) { 
+                console.error("updateAdminBadge:", e);
+                document.getElementById('admin-badge').classList.add('hidden');
+            }
+        }
+
+        async function fetchMyCard() {
+            if (!currentGameId) return;
+            const expectedGameId = currentGameId;
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/my_card/${expectedGameId}`, { headers: authHeaders() });
+                if (!res.ok) return;
+                const data = await res.json();
+
+                if (currentGameId !== expectedGameId) return; 
+
                 if (data.has_card) {
                     renderBingoCard(data.numbers);
-                    document.getElementById('buy-card-btn').disabled = true;
-                    document.getElementById('buy-card-btn').innerText = "✅ ካርድ አለዎት";
                 } else {
-                    document.getElementById('buy-card-btn').disabled = false;
-                    document.getElementById('buy-card-btn').innerText = "🎫 ካርድ ግዛ";
+                    myCardNumbers = []; 
+                    document.getElementById('bingo-grid').innerHTML = `
+                        <div style="grid-column: 1/-1; text-align: center; padding: 40px 10px; color: #999; font-size: 13px;" id="card-placeholder">
+                            🎫 ካርድ ለመግዛት ከታች "ካርድ ግዛ" ን ተጭነው/ቺው
+                        </div>`;
                 }
+                updateBuyButton();
             } catch (e) { console.error("fetchMyCard:", e); }
         }
 
-        // ==================== 4. የጨዋታ ሁኔታ ====================
         async function fetchGameState() {
             if (!currentGameId) return;
+            const expectedGameId = currentGameId;
+            const reqId = ++gameStateRequestId; 
+
             try {
-                const res = await fetch(`${API_BASE_URL}/api/game/${currentGameId}`);
+                const res = await fetch(`${API_BASE_URL}/api/game/${expectedGameId}`);
                 if (!res.ok) return;
                 const data = await res.json();
+
+                if (currentGameId !== expectedGameId) return; 
+                if (reqId !== gameStateRequestId) return; 
                 if (data.error) return;
 
+                if (!['waiting', 'playing', 'finished', 'cancelled'].includes(data.status)) return;
+                
+                currentGameStatus = data.status; 
+                
                 document.getElementById('players-count').innerText = data.players_count || 0;
                 document.getElementById('derash-amount').innerText = data.jackpot || 0;
                 document.getElementById('call-count').innerText = data.call_count || 0;
@@ -298,18 +419,35 @@
                 document.getElementById('bet-amount').innerText = cardPrice;
 
                 setStatusBadge(data.status);
+                updateBuyButton(); 
 
-                if (data.last_number && data.last_number !== lastCalledNumber) {
-                    lastCalledNumber = data.last_number;
-                    const el = document.getElementById('current-call');
-                    el.innerText = data.last_number;
-                    el.style.animation = 'none';
-                    setTimeout(() => el.style.animation = 'pulse 0.4s', 10);
+                // ✅ 3. የ last_number እና called_numbers ተስማሚነት ማረጋገጥ
+                const el = document.getElementById('current-call');
+                const calledArr = (data.called_numbers || '').split(',').filter(x => x).map(Number);
+                const backendLast = data.last_number != null ? Number(data.last_number) : null;
+
+                if (calledArr.length === 0) {
+                    // የተጠሩ ቁጥሮች ከሌሉ last_number መታየት የለበትም
+                    lastCalledNumber = null;
+                    el.innerText = '-';
+                } else if (backendLast != null && !isNaN(backendLast)) {
+                    if (String(backendLast) !== String(lastCalledNumber)) {
+                        lastCalledNumber = backendLast;
+                        el.innerText = backendLast;
+                        el.style.animation = 'none';
+                        setTimeout(() => el.style.animation = 'pulse 0.4s', 10);
+                    }
+                } else {
+                    // Backend last_number ካልላከ የመጨረሻውን የተጠራ ቁጥር ተጠቀም
+                    const fallback = calledArr[calledArr.length - 1];
+                    if (String(fallback) !== String(lastCalledNumber)) {
+                        lastCalledNumber = fallback;
+                        el.innerText = fallback;
+                    }
                 }
 
-                if (data.called_numbers) {
-                    const called = data.called_numbers.split(',').filter(x => x).map(Number);
-                    updateCalledNumbers(called);
+                if (data.called_numbers !== undefined) {
+                    updateCalledNumbers(calledArr);
                 }
 
                 const msg = document.getElementById('status-message');
@@ -326,9 +464,19 @@
         }
 
         function updateCalledNumbers(called) {
-            if (called.length === 0) return;
-            const recent = called.slice(-5).reverse();
             const rc = document.getElementById('recent-calls');
+
+            if (called.length === 0) {
+                rc.innerHTML = '';
+                document.querySelectorAll('#bingo-grid .cell')
+                    .forEach(cell => cell.classList.remove('called'));
+
+                document.getElementById('current-call').innerText = '-';
+                lastCalledNumber = null;
+                return;
+            }
+
+            const recent = called.slice(-5).reverse();
             rc.innerHTML = '';
             recent.forEach(n => {
                 const d = document.createElement('div');
@@ -338,19 +486,38 @@
             });
 
             if (myCardNumbers.length > 0) {
-                const cells = document.querySelectorAll('#bingo-grid .cell');
-                cells.forEach(cell => {
-                    const num = parseInt(cell.innerText);
-                    if (called.includes(num)) cell.classList.add('called');
+                const calledSet = new Set(called);
+
+                document.querySelectorAll('#bingo-grid .cell').forEach((cell, i) => {
+                    cell.classList.remove('called');
+
+                    if (i === 12) return;
+
+                    const num = Number(cell.innerText);
+                    if (calledSet.has(num)) {
+                        cell.classList.add('called');
+                    }
                 });
             }
         }
 
-        // ==================== 5. ካርድ ማሳየት ====================
+        // ⚠️ ነጥብ 1 - ይህ በBackend እስኪረጋገጥ አልተቀየረም
+        // Backend nums[12] = 0 እንደሚያስቀምጥ ከረጋገጡ በኋላ ብቻ ይህን ማስተካከል ይችላሉ
         function renderBingoCard(numbersStr) {
+            if (typeof numbersStr !== 'string') {
+                console.error("Invalid card data");
+                return;
+            }
+
+            const nums = numbersStr.split(',').map(Number);
+
+            if (nums.length !== 25) {
+                console.error("Invalid card data: length is not 25");
+                return;
+            }
+
             const grid = document.getElementById('bingo-grid');
             grid.innerHTML = '';
-            const nums = numbersStr.split(',').map(Number);
             myCardNumbers = nums;
             for (let i = 0; i < 25; i++) {
                 let cell = document.createElement('div');
@@ -366,15 +533,21 @@
             }
         }
 
-        // ==================== 6. ክፍያ ====================
         function openDepositModal() { document.getElementById('depositModal').classList.add('show'); }
         function closeDepositModal() { document.getElementById('depositModal').classList.remove('show'); }
 
         async function selectPayment(method) {
-            const amount = prompt("ያስተላለፍከው/ሽውን ገንዘብ መጠን አስገባ (በብር):");
-            if (!amount || parseFloat(amount) <= 0) return;
+            const amountStr = prompt("ያስተላለፍከው/ሽውን ገንዘብ መጠን አስገባ (በብር):");
+            if (!amountStr) return;
+
+            const amount = Number(amountStr);
+            if (!/^\d+$/.test(amountStr.trim()) || amount < 10 || amount > MAX_DEPOSIT) {
+                showToast(`❌ መጠኑ ከ10 ብር እስከ ${MAX_DEPOSIT} ብር መሆን አለበት`);
+                return;
+            }
+
             const reference = prompt("የደረሰኙን ቁጥር (Transaction ID) አስገባ:");
-            if (!reference) return;
+            if (!reference || reference.trim() === '') return;
 
             closeDepositModal();
             try {
@@ -382,55 +555,73 @@
                     method: 'POST',
                     headers: authHeaders(),
                     body: JSON.stringify({
-                        amount: parseFloat(amount),
+                        amount: amount,
                         method: method,
-                        reference: reference
+                        reference: reference.trim()
                     })
                 });
-                const data = await res.json();
-                if (res.ok) showToast("✅ የክፍያ ጥያቄዎ ተልኳል!");
-                else showToast("❌ " + (data.detail || "ስህተት"));
+                
+                let data = {};
+                try { data = await res.json(); } catch (_) { data = {}; }
+
+                if (res.ok) {
+                    showToast("✅ የክፍያ ጥያቄዎ ተልኳል!");
+                } else {
+                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`));
+                }
             } catch (e) {
                 showToast("❌ የኢንተርኔት ስህተት");
             }
         }
 
-        // ==================== 7. ካርድ መግዛት ====================
         async function buyCard() {
-            if (isBuying) return;
+            if (isBuying || currentGameStatus !== 'waiting' || myCardNumbers.length > 0) {
+                showToast("ካርድ መግዛት አይቻልም");
+                return;
+            }
             if (!currentGameId) {
                 showToast("ጨዋታው ገና አልተጫነም");
                 return;
             }
+            
             isBuying = true;
-            const btn = document.getElementById('buy-card-btn');
-            btn.disabled = true;
-            btn.innerHTML = '<span class="loading"></span>';
+            updateBuyButton(); 
+
+            const gameId = currentGameId; 
 
             try {
                 const res = await fetch(`${API_BASE_URL}/api/buy_card`, {
                     method: 'POST',
                     headers: authHeaders(),
-                    body: JSON.stringify({ game_id: currentGameId })
+                    body: JSON.stringify({ game_id: gameId }) 
                 });
-                const data = await res.json();
+                
+                let data = {};
+                try { data = await res.json(); } catch (_) { data = {}; }
+
                 if (res.ok) {
-                    showToast("🎉 ካርድ ገዝተዋል!");
-                    await fetchMe();
-                    await fetchGameState();
-                    await fetchMyCard();
+                    if (currentGameId === gameId) {
+                        showToast("🎉 ካርድ ገዝተዋል!");
+                        await fetchMe();
+                        await fetchMyCard();
+                        await fetchGameState();
+                    } else {
+                        showToast("የጨዋታ ሁኔታ ተቀይሯል። እባክዎ ያረጋግጡ።");
+                        await loadCurrentGame();
+                        await fetchMyCard();
+                        await fetchGameState();
+                    }
                 } else {
-                    showToast("❌ " + (data.detail || "ስህተት"));
+                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`));
                 }
             } catch (e) {
                 showToast("❌ የኢንተርኔት ስህተት");
             } finally {
                 isBuying = false;
-                btn.disabled = false;
+                updateBuyButton(); 
             }
         }
 
-        // ==================== 8. Admin ====================
         function openAdminPanel() {
             document.getElementById('adminModal').classList.add('show');
             fetchPendingDeposits();
@@ -447,24 +638,51 @@
                     return;
                 }
                 const data = await res.json();
-                if (data.pending.length === 0) {
+                if (!data.pending || data.pending.length === 0) {
                     content.innerHTML = '<p>✅ ምንም የተጠባባቂ ክፍያ የለም።</p>';
                     return;
                 }
-                let html = '';
+                
+                content.innerHTML = ''; 
                 data.pending.forEach(item => {
-                    html += `<div class="admin-item">
-                        <p><b>ID:</b> ${item.user_telegram_id}</p>
-                        <p><b>Username:</b> ${item.username || 'N/A'}</p>
-                        <p><b>መጠን:</b> ${item.amount} ብር</p>
-                        <p><b>መንገድ:</b> ${item.method}</p>
-                        <p><b>ደረሰኝ:</b> ${item.reference}</p>
-                        <p><b>ቀን:</b> ${item.created_at}</p>
-                        <button class="approve-btn" onclick="approveDeposit(${item.id})">✅ ፍቀድ</button>
-                        <button class="reject-btn" onclick="rejectDeposit(${item.id})">❌ ከልክል</button>
-                    </div>`;
+                    const div = document.createElement('div');
+                    div.className = 'admin-item';
+
+                    const pId = document.createElement('p'); pId.innerHTML = `<b>ID:</b> `;
+                    pId.appendChild(document.createTextNode(item.user_telegram_id));
+
+                    const pUser = document.createElement('p'); pUser.innerHTML = `<b>Username:</b> `;
+                    pUser.appendChild(document.createTextNode(item.username || 'N/A'));
+
+                    const pAmount = document.createElement('p'); pAmount.innerHTML = `<b>መጠን:</b> `;
+                    pAmount.appendChild(document.createTextNode(item.amount + ' ብር'));
+
+                    const pMethod = document.createElement('p'); pMethod.innerHTML = `<b>መንገድ:</b> `;
+                    pMethod.appendChild(document.createTextNode(item.method));
+
+                    const pRef = document.createElement('p'); pRef.innerHTML = `<b>ደረሰኝ:</b> `;
+                    pRef.appendChild(document.createTextNode(item.reference));
+
+                    const pDate = document.createElement('p'); pDate.innerHTML = `<b>ቀን:</b> `;
+                    pDate.appendChild(document.createTextNode(item.created_at));
+
+                    const btnApprove = document.createElement('button');
+                    btnApprove.className = 'approve-btn';
+                    btnApprove.textContent = '✅ ፍቀድ';
+                    btnApprove.onclick = () => approveDeposit(item.id);
+
+                    const btnReject = document.createElement('button');
+                    btnReject.className = 'reject-btn';
+                    btnReject.textContent = '❌ ከልክል';
+                    btnReject.onclick = () => rejectDeposit(item.id);
+
+                    div.appendChild(pId); div.appendChild(pUser); div.appendChild(pAmount);
+                    div.appendChild(pMethod); div.appendChild(pRef); div.appendChild(pDate);
+                    div.appendChild(btnApprove); div.appendChild(btnReject);
+                    
+                    content.appendChild(div);
                 });
-                content.innerHTML = html;
+
             } catch (e) {
                 content.innerHTML = '<p>❌ ስህተት</p>';
             }
@@ -476,13 +694,17 @@
                 const res = await fetch(`${API_BASE_URL}/api/admin/approve/${id}`, {
                     method: 'POST', headers: authHeaders()
                 });
-                const data = await res.json();
+                
+                let data = {};
+                try { data = await res.json(); } catch (_) { data = {}; }
+
                 if (res.ok) {
                     showToast("✅ ተፈቅዷል!");
                     await fetchPendingDeposits();
                     await fetchMe();
+                    await updateAdminBadge();
                 } else {
-                    showToast("❌ " + (data.detail || "ስህተት"));
+                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`));
                 }
             } catch (e) { showToast("❌ ስህተት"); }
         }
@@ -493,17 +715,50 @@
                 const res = await fetch(`${API_BASE_URL}/api/admin/reject/${id}`, {
                     method: 'POST', headers: authHeaders()
                 });
-                const data = await res.json();
+                
+                let data = {};
+                try { data = await res.json(); } catch (_) { data = {}; }
+
                 if (res.ok) {
                     showToast("✅ ተከልክሏል!");
                     await fetchPendingDeposits();
+                    await updateAdminBadge();
                 } else {
-                    showToast("❌ " + (data.detail || "ስህተት"));
+                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`));
                 }
             } catch (e) { showToast("❌ ስህተት"); }
         }
 
-        // ==================== Startup ====================
+        async function pollGameState() {
+            if (!isPolling) return;
+            await fetchGameState();
+            setTimeout(pollGameState, 3000); 
+        }
+
+        async function pollMyCard() {
+            if (!isPolling) return;
+            await fetchMyCard();
+            setTimeout(pollMyCard, 10000);
+        }
+
+        async function pollCurrentGame() {
+            if (!isPolling) return;
+            await loadCurrentGame();
+            setTimeout(pollCurrentGame, 15000);
+        }
+
+        async function pollMe() {
+            if (!isPolling) return;
+            await fetchMe();
+            setTimeout(pollMe, 15000);
+        }
+
+        async function pollAdminBadge() {
+            if (!isPolling) return;
+            await updateAdminBadge();
+            setTimeout(pollAdminBadge, 15000);
+        }
+
         window.onload = async function() {
             const ok = await loadCurrentGame();
             if (!ok) {
@@ -513,10 +768,11 @@
             await fetchMyCard();
             await fetchGameState();
 
-            setInterval(fetchGameState, 3000);
-            setInterval(fetchMyCard, 10000);
-            setInterval(loadCurrentGame, 60000);
-            setInterval(fetchMe, 15000);
+            pollGameState();
+            pollMyCard();
+            pollCurrentGame();
+            pollMe();
+            pollAdminBadge();
         };
     </script>
 </body>
