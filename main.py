@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -16,7 +16,7 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Bingo Game API")
 
-# የ CORS ፈቃድ (ለፊት ገጽታው እንዲገናኝ)
+# የ CORS ፈቃድ
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,6 +24,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==================== የአስተዳዳሪ ማዋቀር ====================
+ADMIN_ID = "5671366303" # የአንተ/ሽ የቴሌግራም መታወቂያ
 
 # ==================== የቴሌግራም ቦት ማዋቀር ====================
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_TOKEN_HERE")
@@ -51,7 +54,6 @@ class BuyCardRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    # ይህ ተጫዋቾች ሲገቡ የHTML ገጹን እንዲያዩ ያደርጋል
     return FileResponse("templates/index.html")
 
 @app.get("/api/status")
@@ -76,7 +78,6 @@ def request_deposit(req: DepositRequest, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="ተጠቃሚው አልተገኘም")
     
-    # የደረሰኝ ቁጥሩ ደጋግሞ እንዳልተጠቀመበት ማረጋገጥ
     existing = db.query(models.Transaction).filter(models.Transaction.reference == req.reference).first()
     if existing:
         raise HTTPException(status_code=400, detail="ይህ የደረሰኝ ቁጥር ከዚህ በፊት ተጠቅሟል!")
@@ -103,10 +104,7 @@ def buy_card(req: BuyCardRequest, db: Session = Depends(get_db)):
     if user.balance < card_price:
         raise HTTPException(status_code=400, detail="በቂ ባላንስ የለዎትም። እባክዎ ገንዘብ ያስገቡ።")
     
-    # ባላንስ መቀነስ
     user.balance -= card_price
-    
-    # የቢንጎ ካርድ ቁጥሮችን ማመንጨት (1-75)
     card_numbers = ",".join(str(random.randint(1, 75)) for _ in range(25))
     
     new_card = models.Card(user_id=user.id, game_id=req.game_id, numbers=card_numbers)
@@ -115,12 +113,11 @@ def buy_card(req: BuyCardRequest, db: Session = Depends(get_db)):
     
     return {"message": "ካርድ በተሳካ ሁኔታ ገዝተዋል!", "new_balance": user.balance, "card": card_numbers}
 
-# 4. የጨዋታ ሁኔታ ማግኘት (ለፊት ገጽታው)
+# 4. የጨዋታ ሁኔታ ማግኘት
 @app.get("/api/game/{game_id}")
 def get_game_state(game_id: int, db: Session = Depends(get_db)):
     game = db.query(models.Game).filter(models.Game.id == game_id).first()
     if not game:
-        # አዲስ ጨዋታ መፍጠር (ለሙከራ)
         game = models.Game(status="waiting", jackpot=0.0)
         db.add(game)
         db.commit()
@@ -134,7 +131,24 @@ def get_game_state(game_id: int, db: Session = Depends(get_db)):
         "called_numbers": game.called_numbers
     }
 
-# 5. የአስተዳዳሪ ማረጋገጫ (Deposit Approve)
+# 5. የአስተዳዳሪ ክፍያዎችን ማየት (Admin Panel)
+@app.get("/api/admin/pending")
+def get_pending_deposits(db: Session = Depends(get_db)):
+    pending = db.query(models.Transaction).filter(models.Transaction.status == "pending").all()
+    result = []
+    for trans in pending:
+        user = db.query(models.User).filter(models.User.id == trans.user_id).first()
+        result.append({
+            "id": trans.id,
+            "user_id": user.telegram_id if user else "Unknown",
+            "amount": trans.amount,
+            "method": trans.method,
+            "reference": trans.reference,
+            "created_at": trans.created_at.strftime("%Y-%m-%d %H:%M")
+        })
+    return {"pending": result}
+
+# 6. የአስተዳዳሪ ማረጋገጫ (Deposit Approve)
 @app.post("/api/admin/approve/{transaction_id}")
 def approve_deposit(transaction_id: int, db: Session = Depends(get_db)):
     trans = db.query(models.Transaction).filter(models.Transaction.id == transaction_id).first()
@@ -146,9 +160,10 @@ def approve_deposit(transaction_id: int, db: Session = Depends(get_db)):
     
     trans.status = "approved"
     user = db.query(models.User).filter(models.User.id == trans.user_id).first()
-    user.balance += trans.amount
+    if user:
+        user.balance += trans.amount
     db.commit()
-    return {"message": "ግብይቱ በተሳካ ሁኔታ ጸድቋል!", "new_balance": user.balance}
+    return {"message": "ግብይቱ በተሳካ ሁኔታ ጸድቋል!", "new_balance": user.balance if user else 0}
 
 # የቦቱን ስራ በ parallel ማስኬድ
 @app.on_event("startup")
