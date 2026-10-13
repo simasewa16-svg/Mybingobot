@@ -6,6 +6,7 @@
 - Connection pooling ለProduction
 - UTC timezone
 - pool_pre_ping (የሞተ connection ያድሳል)
+- psycopg2-binary ብቻ (v2 driver)
 =====================================================================
 """
 from sqlalchemy import create_engine, event
@@ -16,7 +17,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# ✅ DATABASE_URL ከ environment variable
+# ==================== DATABASE_URL ማዋቀር ====================
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
@@ -32,15 +33,12 @@ if DATABASE_URL.startswith("postgres://"):
 if not DATABASE_URL.startswith("postgresql://"):
     raise RuntimeError("❌ PostgreSQL URL ብቻ ይፈቀዳል!")
 
-# ✅ Connection pooling (Production-ready)
-# ✅ SQLAlchemy ትክክለኛውን driver እንዲመርጥ
-if DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
-elif DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+# ✅ SQLAlchemy ትክክለኛውን driver እንዲመርጥ (psycopg2 ብቻ - v3 አይደለም!)
+DATABASE_URL = DATABASE_URL.replace(
+    "postgresql://", "postgresql+psycopg2://", 1
+)
 
-engine = create_engine(
-    DATABASE_URL,
+# ==================== Engine መፍጠር ====================
 engine = create_engine(
     DATABASE_URL,
     poolclass=QueuePool,
@@ -52,6 +50,7 @@ engine = create_engine(
     future=True,
 )
 
+# ==================== Session Factory ====================
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
@@ -62,7 +61,8 @@ SessionLocal = sessionmaker(
 
 Base = declarative_base()
 
-# ✅ PostgreSQL ላይ UTC ማረጋገጥ
+
+# ==================== PostgreSQL UTC timezone ====================
 @event.listens_for(engine, "connect")
 def set_timezone(dbapi_conn, conn_record):
     cursor = dbapi_conn.cursor()
@@ -72,6 +72,7 @@ def set_timezone(dbapi_conn, conn_record):
         cursor.close()
 
 
+# ==================== FastAPI Dependency ====================
 def get_db():
     """FastAPI dependency - ሁልጊዜ session ይዘጋል"""
     db = SessionLocal()
