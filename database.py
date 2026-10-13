@@ -2,11 +2,10 @@
 =====================================================================
 ✅ የዳታቤዝ ማዋቀሪያ (database.py)
 =====================================================================
-- PostgreSQL-only (SQLite አይደግፍም)
+- PostgreSQL-only
+- psycopg3 (v3) driver
 - Connection pooling ለProduction
 - UTC timezone
-- pool_pre_ping (የሞተ connection ያድሳል)
-- psycopg2-binary ብቻ (v2 driver)
 =====================================================================
 """
 from sqlalchemy import create_engine, event
@@ -17,12 +16,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# ==================== DATABASE_URL ማዋቀር ====================
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    # ለአካባቢ ልማት ብቻ fallback
-    DATABASE_URL = "postgresql://user:password@localhost/bingo"
+    DATABASE_URL = "postgresql+psycopg://user:password@localhost/bingo"
     logger.warning("⚠️ DATABASE_URL not set, using fallback!")
 
 # ✅ Heroku/Render style URL ማስተካከል
@@ -33,9 +30,9 @@ if DATABASE_URL.startswith("postgres://"):
 if not DATABASE_URL.startswith("postgresql://"):
     raise RuntimeError("❌ PostgreSQL URL ብቻ ይፈቀዳል!")
 
-# ✅ SQLAlchemy ትክክለኛውን driver እንዲመርጥ (psycopg2 ብቻ - v3 አይደለም!)
+# ✅ psycopg3 (v3) driver ን ተጠቀም - Python 3.14 ይደግፋል!
 DATABASE_URL = DATABASE_URL.replace(
-    "postgresql://", "postgresql+psycopg2://", 1
+    "postgresql://", "postgresql+psycopg://", 1
 )
 
 # ==================== Engine መፍጠር ====================
@@ -44,8 +41,8 @@ engine = create_engine(
     poolclass=QueuePool,
     pool_size=5,
     max_overflow=10,
-    pool_pre_ping=True,      # የሞተ connection ያድሳል
-    pool_recycle=300,        # በየ 5 ደቂቃው ያድሳል
+    pool_pre_ping=True,
+    pool_recycle=300,
     echo=False,
     future=True,
 )
@@ -62,7 +59,6 @@ SessionLocal = sessionmaker(
 Base = declarative_base()
 
 
-# ==================== PostgreSQL UTC timezone ====================
 @event.listens_for(engine, "connect")
 def set_timezone(dbapi_conn, conn_record):
     cursor = dbapi_conn.cursor()
@@ -72,9 +68,7 @@ def set_timezone(dbapi_conn, conn_record):
         cursor.close()
 
 
-# ==================== FastAPI Dependency ====================
 def get_db():
-    """FastAPI dependency - ሁልጊዜ session ይዘጋል"""
     db = SessionLocal()
     try:
         yield db
