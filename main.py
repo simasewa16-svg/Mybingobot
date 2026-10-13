@@ -451,8 +451,8 @@ def reject_deposit(transaction_id: int, admin: models.User = Depends(require_adm
     return {"message": "ተከልክሏል!"}
 
 # ✅ Reconciliation
-@app.get("/api/admin/reconcile")
-def reconcile(admin: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+@app.get("/api/game/current/state")
+def get_or_create_current_game(db: Session = Depends(get_db)):
     users = db.query(models.User).all()
     mismatches = []
     for u in users:
