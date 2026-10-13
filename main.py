@@ -1,6 +1,6 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v3.0 FINAL
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v3.1 FINAL
 =====================================================================
 ✅ P0 ሁሉም ተስተካክሏል
 ✅ Production-safe
@@ -9,6 +9,7 @@
 ✅ Refund balance verification
 ✅ Engine error recovery
 ✅ Correct routes
+✅ Auto-Migration Fallback (stamp base + upgrade)
 =====================================================================
 """
 from fastapi import FastAPI, Depends, HTTPException, Header
@@ -722,38 +723,89 @@ def check_winners(db, game, called_set):
     logger.info(f"Game {game.id}: payout complete. winners={n}, total={total_paid}")
 
 
-# ==================== Startup (PRODUCTION-SAFE) ====================
+# ==================== Startup (AUTO-MIGRATION FALLBACK) ====================
 @app.on_event("startup")
 def startup_event():
     """
-    ✅ ማስጀመሪያ - Schema አይቀይርም!
-    ሠንጠረዦች ከሌሉ ስርዓቱ ይቆማል
+    ✅ የሰርቨር ማስጀመሪያ (v3.1 - Auto-Migration Fallback)
+
+    🔒 ደህንነት፦
+    1. ሠንጠረዦች ካሉ → በቀጥታ ይጀምራል
+    2. ከሌሉ → Alembic migration ይሞክራል
+    3. alembic_version stale ካለ → stamp base + upgrade head
+    4. Alembic ካልሰራ → create_all fallback
+    5. ሁሉም ካልሰራ → ስርዓቱ ይቆማል
     """
     try:
+        # ============ ደረጃ 1፦ ሠንጠረዦች መኖራቸውን አረጋግጥ ============
         inspector = inspect(engine)
         existing_tables = set(inspector.get_table_names(schema="public"))
         missing_tables = sorted(REQUIRED_TABLES - existing_tables)
 
         if missing_tables:
-            raise RuntimeError(
-                "Required database tables are missing: "
-                + ", ".join(missing_tables)
-                + ". Apply a reviewed migration before startup."
-            )
+            logger.warning(f"⚠️ Missing tables: {missing_tables}")
+            logger.info("🔄 Attempting Alembic migration...")
 
+            # ============ ደረጃ 2፦ Alembic migration ሞክር ============
+            try:
+                from alembic.config import Config
+                from alembic import command
+
+                alembic_cfg = Config("alembic.ini")
+
+                # ✅ alembic_version ሠንጠረዥ ካለ ግን stale ከሆነ → stamp base
+                if "alembic_version" in existing_tables:
+                    try:
+                        logger.info("🔄 alembic_version exists, stamping base...")
+                        command.stamp(alembic_cfg, "base")
+                    except Exception as stamp_err:
+                        logger.warning(f"Stamp base failed: {stamp_err}")
+
+                # ✅ Migration ስራ
+                logger.info("🔄 Running alembic upgrade head...")
+                command.upgrade(alembic_cfg, "head")
+                logger.info("✅ Alembic migration completed")
+
+            except Exception as mig_err:
+                logger.error(f"⚠️ Alembic migration failed: {mig_err}")
+
+                # ============ ደረጃ 3፦ Fallback: create_all ============
+                try:
+                    logger.info("🔄 Trying create_all fallback...")
+                    Base.metadata.create_all(bind=engine)
+                    logger.info("✅ create_all fallback completed")
+                except Exception as create_err:
+                    logger.exception(f"❌ create_all also failed: {create_err}")
+
+            # ============ ደረጃ 4፦ እንደገና አረጋግጥ ============
+            inspector = inspect(engine)
+            existing_tables = set(inspector.get_table_names(schema="public"))
+            still_missing = sorted(REQUIRED_TABLES - existing_tables)
+
+            if still_missing:
+                raise RuntimeError(
+                    f"❌ Tables still missing after migration: {still_missing}"
+                )
+
+            logger.info(f"✅ All {len(existing_tables)} tables verified")
+        else:
+            logger.info(f"✅ All required tables exist. ({len(existing_tables)} tables)")
+
+        # ============ ደረጃ 5፦ Connection test ============
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
-
-        logger.info(f"✅ Database preflight passed. {len(existing_tables)} tables.")
+        logger.info("✅ Database connection verified")
 
     except Exception:
-        logger.exception("❌ Database preflight failed. Startup aborted.")
+        logger.exception("❌ Startup failed. Application aborted.")
         raise
 
+    # ============ ደረጃ 6፦ Telegram Bot ጅምር ============
     if bot:
         threading.Thread(target=run_bot, daemon=True).start()
         logger.info("✅ Telegram bot started.")
 
+    # ============ ደረጃ 7፦ Bingo Engine ጅምር ============
     threading.Thread(target=bingo_engine_loop, daemon=True).start()
     logger.info("✅ Bingo engine started.")
     logger.info("✅ Bingo backend started successfully.")
