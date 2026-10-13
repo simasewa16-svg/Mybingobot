@@ -1,7 +1,8 @@
 fastapi
 uvicorn
 sqlalchemy
-psycopg2-binary
+psycopg2-binary==2.9.9
+psycopg[binary]
 pyTelegramBotAPI
 python-dotenv
 pydantic
