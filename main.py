@@ -1,11 +1,12 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v8.3 FINAL (DB Stability + Startup Retry)
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v8.4 FINAL (Non-Blocking Startup)
 =====================================================================
-✅ አዲስ: DB Error Handler Middleware (503 ይመልሳል → Retry ይሰራል)
-✅ አዲስ: get_or_create_current_game ላይ Connection Retry
-✅ አዲስ: InterfaceError ድጋፍ
-✅ አዲስ: startup_event ላይ ዳታቤዙን በትዕግስት የሚጠብቅ ስርዓት (check_db_connection)
+✅ አዲስ: startup_event ላይ ዳታቤዙን አይጠብቅም (Render 50s timeout ለማስቀረት)
+✅ አዲስ: safe_db_execute ወደ 15 ሙከራ ከፍ ብሏል (እስከ 60 ሰከንድ ይጠብቃል)
+✅ DB Error Handler Middleware (503 ይመልሳል → Retry ይሰራል)
+✅ get_or_create_current_game ላይ Connection Retry
+✅ InterfaceError ድጋፍ
 ✅ ሁሉንም ያካትታል (multi-admin, withdrawal, players, fraud)
 =====================================================================
 """
@@ -26,7 +27,7 @@ import time
 import logging
 from datetime import datetime, timedelta, timezone
 
-from database import engine, get_db, Base, SessionLocal, check_db_connection
+from database import engine, get_db, Base, SessionLocal
 from auth import verify_telegram_init_data
 from admin_auth import (
     get_admin_user, has_permission, is_super_admin,
@@ -66,7 +67,7 @@ app.add_middleware(
 )
 
 # =====================================================================
-# ✅ አዲስ: DB Error Handler Middleware
+# ✅ DB Error Handler Middleware
 # =====================================================================
 @app.middleware("http")
 async def db_error_handler(request: Request, call_next):
@@ -213,8 +214,11 @@ def lock_game(db, game_id):
     return db.query(models.Game).filter(models.Game.id == game_id).with_for_update().first()
 
 
-def safe_db_execute(db: Session, retries: int = 5):
-    """✅ አዲስ: DB ግንኙነትን ማረጋገጥ እና እንደገና መሞከር"""
+def safe_db_execute(db: Session, retries: int = 15):
+    """
+    ✅ አዲስ: DB ግንኙነትን ማረጋገጥ እና እንደገና መሞከር
+    ይህ ፈንክሽን አሁን ዳታቤዙ እስኪነቃ ድረስ እስከ 60 ሰከንድ ይጠብቃል
+    """
     for attempt in range(retries):
         try:
             db.execute(text("SELECT 1"))
@@ -226,7 +230,7 @@ def safe_db_execute(db: Session, retries: int = 5):
             except Exception:
                 pass
             if attempt < retries - 1:
-                time.sleep(5) # ከ1 ሰከንድ ወደ 5 ሰከንድ ጨመርነው
+                time.sleep(4) # በየ4 ሰከንዱ ይሞክራል (15 * 4 = 60 ሰከንድ)
             else:
                 return False
     return False
@@ -500,8 +504,8 @@ def health_check():
 # =====================================================================
 @app.get("/api/game/current/state")
 def get_or_create_current_game(db: Session = Depends(get_db)):
-    # ✅ አዲስ: የDB ግንኙነት ማረጋገጫ እና እንደገና መሞከር
-    if not safe_db_execute(db, retries=5):
+    # ✅ የDB ግንኙነት ማረጋገጫ እና እንደገና መሞከር (እስከ 60 ሰከንድ ይጠብቃል)
+    if not safe_db_execute(db, retries=15):
         logger.error("Cannot reach database in get_or_create_current_game")
         raise HTTPException(
             status_code=503,
@@ -1631,55 +1635,15 @@ def check_winners(db, game, called_set):
 
 
 # =====================================================================
-# ✅ STARTUP
+# ✅ STARTUP (ዳታቤዙን አይጠብቅም)
 # =====================================================================
 @app.on_event("startup")
 def startup_event():
-    logger.info("⏳ ሰርቨሩ በመነሳት ላይ ነው... ዳታቤዙን በመጠበቅ ላይ")
+    logger.info("⏳ ሰርቨሩ በመነሳት ላይ ነው...")
     
-    # ✅ 1. ዳታቤዙ እስኪነቃ ድረስ በትዕግስት መጠበቅ (እስከ 60 ሰከንድ)
-    if not check_db_connection(max_retries=12, delay_seconds=5):
-        logger.error("❌ ዳታቤዙን ማግኘት አልቻልንም! ሰርቨሩ ይዘጋል።")
-        raise RuntimeError("Database not reachable at startup.")
-
-    try:
-        inspector = inspect(engine)
-        existing_tables = set(inspector.get_table_names(schema="public"))
-
-        # Alembic migration
-        if "alembic_version" in existing_tables:
-            try:
-                from alembic.config import Config
-                from alembic import command
-                logger.info("🔄 Running alembic upgrade head...")
-                alembic_cfg = Config("alembic.ini")
-                command.upgrade(alembic_cfg, "head")
-                logger.info("✅ Alembic migration completed")
-            except Exception as mig_err:
-                logger.warning(f"⚠️ Alembic migration failed: {mig_err}")
-
-        # Tables check
-        inspector = inspect(engine)
-        existing_tables = set(inspector.get_table_names(schema="public"))
-        missing_tables = sorted(REQUIRED_TABLES - existing_tables)
-        if missing_tables:
-            logger.warning(f"⚠️ Missing tables: {missing_tables}")
-            Base.metadata.create_all(bind=engine)
-            logger.info("✅ create_all completed")
-
-        logger.info("✅ Database connection verified")
-
-        # Super Admin
-        db_init = SessionLocal()
-        try:
-            ensure_super_admin_exists(db_init)
-            logger.info("✅ Super Admin verified")
-        finally:
-            db_init.close()
-
-    except Exception:
-        logger.exception("❌ Startup failed.")
-        raise
+    # ❌ ዳታቤዙን እዚህ መጠበቅ ተቀርቷል (Render 50s timeout ስለሚፈጥር)
+    # ሰርቨሩ ወዲያውኑ እንዲነሳ ተደርጓል። ዳታቤዙን የመጠበቅ ስራው
+    # በ `safe_db_execute` በኩል ተጠቃሚው ጥያቄ ሲልክ ይሰራል።
 
     if bot:
         threading.Thread(target=run_bot, daemon=True).start()
