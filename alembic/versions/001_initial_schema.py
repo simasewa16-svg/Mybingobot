@@ -11,6 +11,9 @@ Create Date: 2026-10-13
 - transactions ሠንጠረዥ
 - audit_logs ሠንጠረዥ
 - ledger_entries ሠንጠረዥ (unique constraint)
+
+⚠️ ማስታወሻ: ይህ migration አስቀድሞ ተጠቅሷል።
+    ለማስተካከል 002 እና 003 ይጠቀሙ።
 """
 from alembic import op
 import sqlalchemy as sa
@@ -29,11 +32,12 @@ def upgrade() -> None:
     op.create_table(
         'users',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column('telegram_id', sa.String(), nullable=False),
-        sa.Column('username', sa.String(), nullable=True),
+        sa.Column('telegram_id', sa.String(50), nullable=False),
+        sa.Column('username', sa.String(255), nullable=True),
         sa.Column('balance', sa.Numeric(12, 2), server_default='0.00', nullable=False),
         sa.Column('is_banned', sa.Boolean(), server_default=sa.text('false'), nullable=False),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True),
+                  server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint('balance >= 0', name='ck_user_balance_non_negative'),
     )
     op.create_index('ix_users_telegram_id', 'users', ['telegram_id'], unique=True)
@@ -44,20 +48,23 @@ def upgrade() -> None:
     op.create_table(
         'games',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column('status', sa.String(), nullable=False, server_default='waiting'),
+        sa.Column('status', sa.String(20), nullable=False, server_default='waiting'),
         sa.Column('jackpot', sa.Numeric(12, 2), server_default='0.00', nullable=False),
-        sa.Column('card_price', sa.Numeric(12, 2), server_default='10.00', nullable=False),
+        sa.Column('card_price', sa.Numeric(10, 2), server_default='10.00', nullable=False),
         sa.Column('call_count', sa.Integer(), server_default='0', nullable=False),
         sa.Column('called_numbers', sa.Text(), server_default='', nullable=False),
         sa.Column('last_number', sa.Integer(), nullable=True),
-        sa.Column('last_drawn_at', sa.DateTime(), nullable=True),
+        sa.Column('last_drawn_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('winner_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=True),
         sa.Column('refunded', sa.Boolean(), server_default=sa.text('false'), nullable=False),
-        sa.Column('payout_completed', sa.Boolean(), server_default=sa.text('false'), nullable=False),
-        sa.Column('rollover_jackpot', sa.Numeric(12, 2), server_default='0.00', nullable=False),
-        sa.Column('started_at', sa.DateTime(), nullable=True),
-        sa.Column('finished_at', sa.DateTime(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column('payout_completed', sa.Boolean(),
+                  server_default=sa.text('false'), nullable=False),
+        sa.Column('rollover_jackpot', sa.Numeric(12, 2),
+                  server_default='0.00', nullable=False),
+        sa.Column('started_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('finished_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True),
+                  server_default=sa.func.now(), nullable=False),
     )
     # ✅ Partial Unique Index - አንድ ንቁ ጨዋታ ብቻ
     op.execute("""
@@ -74,12 +81,13 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False),
         sa.Column('game_id', sa.Integer(), sa.ForeignKey('games.id'), nullable=False),
-        sa.Column('numbers', sa.Text(), nullable=False),
+        sa.Column('numbers', sa.String(255), nullable=False),
         sa.Column('is_winner', sa.Boolean(), server_default=sa.text('false'), nullable=False),
-        sa.Column('price_paid', sa.Numeric(12, 2), server_default='10.00', nullable=False),
+        sa.Column('price_paid', sa.Numeric(10, 2), server_default='10.00', nullable=False),
         sa.Column('refunded', sa.Boolean(), server_default=sa.text('false'), nullable=False),
-        sa.Column('refunded_at', sa.DateTime(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column('refunded_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True),
+                  server_default=sa.func.now(), nullable=False),
         sa.UniqueConstraint('user_id', 'game_id', name='uq_user_game_card'),
     )
     op.create_index('ix_cards_user_id', 'cards', ['user_id'])
@@ -93,16 +101,18 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False),
         sa.Column('amount', sa.Numeric(12, 2), nullable=False),
-        sa.Column('method', sa.String(), nullable=False),
-        sa.Column('status', sa.String(), server_default='pending', nullable=False),
-        sa.Column('reference', sa.String(), nullable=False),
-        sa.Column('reviewed_by', sa.String(), nullable=True),
-        sa.Column('reviewed_at', sa.DateTime(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column('method', sa.String(50), nullable=False),
+        sa.Column('status', sa.String(20), server_default='pending', nullable=False),
+        sa.Column('reference', sa.String(100), nullable=False),
+        sa.Column('reviewed_by', sa.String(50), nullable=True),
+        sa.Column('reviewed_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True),
+                  server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint('amount > 0', name='ck_transaction_amount_positive'),
     )
     op.create_index('ix_transactions_user_id', 'transactions', ['user_id'])
-    op.create_index('ix_transactions_reference', 'transactions', ['reference'], unique=True)
+    op.create_index('ix_transactions_reference', 'transactions',
+                    ['reference'], unique=True)
     op.create_index('ix_transactions_created_at', 'transactions', ['created_at'])
 
     # ================================================================
@@ -111,12 +121,13 @@ def upgrade() -> None:
     op.create_table(
         'audit_logs',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column('actor_id', sa.String(), nullable=False),
-        sa.Column('action', sa.String(), nullable=False),
-        sa.Column('target_type', sa.String(), nullable=True),
-        sa.Column('target_id', sa.String(), nullable=True),
+        sa.Column('actor_id', sa.String(50), nullable=False),
+        sa.Column('action', sa.String(100), nullable=False),
+        sa.Column('target_type', sa.String(50), nullable=True),
+        sa.Column('target_id', sa.String(50), nullable=True),
         sa.Column('details', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True),
+                  server_default=sa.func.now(), nullable=False),
     )
     op.create_index('ix_audit_logs_actor_id', 'audit_logs', ['actor_id'])
     op.create_index('ix_audit_logs_action', 'audit_logs', ['action'])
@@ -129,13 +140,14 @@ def upgrade() -> None:
         'ledger_entries',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False),
-        sa.Column('entry_type', sa.String(), nullable=False),
+        sa.Column('entry_type', sa.String(50), nullable=False),
         sa.Column('amount', sa.Numeric(12, 2), nullable=False),
         sa.Column('balance_after', sa.Numeric(12, 2), nullable=False),
-        sa.Column('reference_type', sa.String(), nullable=True),
-        sa.Column('reference_id', sa.String(), nullable=True),
+        sa.Column('reference_type', sa.String(50), nullable=True),
+        sa.Column('reference_id', sa.String(50), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True),
+                  server_default=sa.func.now(), nullable=False),
         sa.UniqueConstraint(
             'user_id', 'entry_type', 'reference_type', 'reference_id',
             name='uq_ledger_no_duplicate'
@@ -149,7 +161,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     """
     ⚠️ አደጋ! ይህ ተግባር ሁሉንም ሠንጠረዦች ያጠፋል!
-    በ Production ላይ ፈጽሞ አታስኪድ/ጂው!
+    በ Production ላይ ፈጽሞ አታስኪድ!
     """
     op.drop_index('ix_ledger_entries_created_at', 'ledger_entries')
     op.drop_index('ix_ledger_entries_entry_type', 'ledger_entries')
