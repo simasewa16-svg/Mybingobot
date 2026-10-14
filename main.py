@@ -1476,6 +1476,12 @@ def startup_event():
         inspector = inspect(engine)
         existing_tables = set(inspector.get_table_names(schema="public"))
 
+        # ✅ አዲስ የተጨመረ፡ አሮጌውን ሠንጠረዥ አጥፍቶ አዲሱን ለመፍጠር (ለ Schema Update)
+        logger.warning("⚠️ Dropping old tables to update schema...")
+        Base.metadata.drop_all(bind=engine) 
+        Base.metadata.create_all(bind=engine)
+        logger.info("✅ Tables dropped and recreated successfully.")
+
         # ✅ 1. Migration ያስኪድ
         if "alembic_version" in existing_tables:
             try:
