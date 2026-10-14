@@ -1,850 +1,1114 @@
-<!DOCTYPE html>
-<html lang="am">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ሃ ቡንላ ከድራ!</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, sans-serif; -webkit-tap-highlight-color: transparent; }
-        body { background-color: #f3e5f5; padding: 10px; color: #333; min-height: 100vh; }
-        .app-container { max-width: 800px; margin: auto; display: flex; flex-direction: column; gap: 10px; padding-bottom: 80px; }
-        .top-header { background: linear-gradient(135deg, #6a1b9a, #ab47bc); color: white; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 2px 8px rgba(106,27,154,0.3); }
-        .top-header h1 { font-size: 18px; margin-bottom: 5px; }
-        .balance-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 8px; }
-        .btn-deposit { background: #4caf50; color: white; border: none; padding: 6px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 13px; }
-        .btn-deposit:active { transform: scale(0.96); }
-        .stats-grid { display: flex; justify-content: space-between; background: #fff; padding: 10px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); }
-        .stat-box { text-align: center; font-size: 11px; color: #666; flex: 1; border-right: 1px solid #f0f0f0; }
-        .stat-box:last-child { border-right: none; }
-        .stat-box b { display: block; font-size: 16px; color: #6a1b9a; margin-top: 4px; font-weight: 700; }
-        .game-area { display: flex; flex-direction: row; gap: 10px; }
-        @media (max-width: 600px) { .game-area { flex-direction: column; } }
-        .bingo-card { flex: 1; background: #fff; padding: 10px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); }
-        .card-headers { display: grid; grid-template-columns: repeat(5, 1fr); text-align: center; font-weight: bold; font-size: 22px; margin-bottom: 6px; }
-        .card-headers div:nth-child(1) { color: #2e7d32; }
-        .card-headers div:nth-child(2) { color: #f57c00; }
-        .card-headers div:nth-child(3) { color: #1976d2; }
-        .card-headers div:nth-child(4) { color: #d32f2f; }
-        .card-headers div:nth-child(5) { color: #7b1fa2; }
-        .card-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
-        .cell { background: #e0e0e0; text-align: center; padding: 11px 0; border-radius: 5px; font-weight: bold; color: #333; user-select: none; font-size: 14px; transition: all 0.2s; }
-        .cell.marked { background: #ff9800; color: white; }
-        .cell.called { background: #4caf50; color: white; animation: pulse 0.4s; }
-        .cell.free { cursor: default; }
-        .cell.winning { background: #d32f2f; color: white; }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-        .call-area { flex: 1; display: flex; flex-direction: column; gap: 10px; }
-        .current-call-box { background: #6a1b9a; color: white; padding: 15px; border-radius: 15px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(106,27,154,0.3); }
-        .current-call-box span { font-size: 13px; margin-bottom: 8px; opacity: 0.9; }
-        .big-circle { background: #ff9800; width: 85px; height: 85px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: bold; box-shadow: 0 4px 12px rgba(255,152,0,0.5); }
-        .recent-calls { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; min-height: 45px; }
-        .recent-calls .small-circle { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; color: white; background: #ff9800; box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
-        .game-status { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 10px 15px; border-radius: 10px; font-size: 13px; font-weight: bold; }
-        .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; }
-        .status-waiting { background: #fff3e0; color: #e65100; }
-        .status-playing { background: #e8f5e9; color: #2e7d32; }
-        .status-finished { background: #f3e5f5; color: #6a1b9a; }
-        .status-error { background: #ffebee; color: #c62828; }
-        .message-box { background: #f3e5f5; border: 2px solid #ce93d8; padding: 18px; border-radius: 10px; text-align: center; color: #6a1b9a; font-weight: bold; font-size: 13px; line-height: 1.5; }
-        .bottom-nav { display: flex; gap: 8px; margin-top: 10px; position: fixed; bottom: 0; left: 0; right: 0; padding: 10px; background: linear-gradient(to top, #f3e5f5 80%, transparent); max-width: 800px; margin: 0 auto; }
-        .nav-btn { flex: 1; background: #7b1fa2; color: white; border: none; padding: 14px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 8px rgba(123,31,162,0.3); }
-        .nav-btn:active { transform: scale(0.97); }
-        .nav-btn:disabled { background: #bdbdbd; cursor: not-allowed; }
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; padding: 15px; }
-        .modal-overlay.show { display: flex; }
-        .modal-box { background: white; width: 100%; max-width: 420px; padding: 20px; border-radius: 15px; text-align: center; max-height: 85vh; overflow-y: auto; }
-        .modal-box h2 { color: #6a1b9a; margin-bottom: 15px; font-size: 17px; }
-        .modal-box p { font-size: 13px; color: #666; margin-bottom: 10px; line-height: 1.5; }
-        .payment-options { display: flex; flex-direction: column; gap: 10px; margin: 15px 0; }
-        .pay-btn { padding: 14px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; color: white; font-size: 15px; }
-        .pay-btn:active { transform: scale(0.98); }
-        .pay-telebirr { background: #4caf50; }
-        .pay-cbe { background: #800080; }
-        .account-number { font-size: 22px; font-weight: bold; color: #d32f2f; margin: 10px 0; letter-spacing: 1.5px; padding: 10px; background: #ffebee; border-radius: 8px; }
-        .close-btn { background: #e0e0e0; color: #333; border: none; padding: 12px 24px; border-radius: 8px; margin-top: 10px; cursor: pointer; font-weight: bold; }
-        .close-btn:active { transform: scale(0.97); }
-        .admin-panel-btn { position: fixed; bottom: 90px; right: 15px; background: #d32f2f; color: white; border: none; padding: 14px; border-radius: 50%; font-size: 22px; box-shadow: 0 4px 12px rgba(211,47,47,0.4); cursor: pointer; display: none; z-index: 999; }
-        .badge { position: absolute; top: -5px; right: -5px; background-color: #d32f2f; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; font-weight: bold; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-        .hidden { display: none !important; }
-        .admin-item { border: 1px solid #e0e0e0; padding: 12px; margin-bottom: 12px; border-radius: 10px; text-align: left; font-size: 13px; background: #fafafa; }
-        .admin-item b { color: #6a1b9a; }
-        .admin-item p { margin-bottom: 4px; font-size: 13px; }
-        .approve-btn { background: #4caf50; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; margin-top: 6px; width: 100%; font-weight: bold; }
-        .reject-btn { background: #d32f2f; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; margin-top: 6px; width: 100%; font-weight: bold; }
-        .approve-btn:disabled, .reject-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #323232; color: white; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 2000; opacity: 0; transition: opacity 0.3s; max-width: 90%; }
-        .toast.show { opacity: 1; }
-        .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .error-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f3e5f5; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; padding: 30px; text-align: center; }
-        .error-screen.show { display: flex; }
-        .error-screen h2 { color: #d32f2f; margin-bottom: 15px; }
-        .error-screen p { color: #666; margin-bottom: 20px; line-height: 1.5; }
-    </style>
-</head>
-<body>
-    <div class="error-screen" id="errorScreen">
-        <h2>⚠️ ስህተት</h2>
-        <p>ይህ ገጽ በቴሌግራም ውስጥ ብቻ ይሰራል።<br>እባክህ/ሽ በቴሌግራም ቦት በኩል ክፈተው/ተው።</p>
-    </div>
+"""
+=====================================================================
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v7.2 FINAL
+=====================================================================
+✅ P0: original_jackpot ለ recover_game
+✅ P0: recover_game original_jackpot=0 fallback
+✅ P1: get_or_create_current_game ያለ rollback
+✅ P1: reconcile() refunded cards
+✅ P1: validate_schema() rollover_transferred + original_jackpot
+✅ P1: parse_called_numbers() malformed reject
+✅ P1: with_for_update() on prev_game
+✅ startup_event auto-migration + Schema Auto-Fix
+✅ secure_random.choice ለጨዋታ ቁጥሮች
+✅ Bot/Engine dedicated connection locks
+✅ CORS በ production ተገድቧል
+✅ /api/health ላይ HEAD method ድጋፍ
+✅ አዲስ: /api/leaderboard (ሰንጠረዥ)
+✅ አዲስ: /api/history (የተጠቃሚ ታሪክ)
+=====================================================================
+"""
+from fastapi import FastAPI, Depends, HTTPException, Header, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from sqlalchemy.orm import Session
+from sqlalchemy import text, inspect, func
+from sqlalchemy.exc import IntegrityError, OperationalError, DBAPIError
+from pydantic import BaseModel, Field
+from decimal import Decimal, ROUND_DOWN
+from typing import Literal, List, Optional
+import os
+import secrets
+import telebot
+import threading
+import time
+import logging
+from datetime import datetime, timedelta, timezone
 
-    <div class="app-container">
-        <div class="top-header">
-            <h1>🎰 ሃ ቡንላ ከድራ!</h1>
-            <div class="balance-bar">
-                <span>💰 ባላንስ: <b id="user-balance">0 ብር</b></span>
-                <button class="btn-deposit" onclick="openDepositModal()">+ ጨምር</button>
-            </div>
-        </div>
-        <div class="stats-grid">
-            <div class="stat-box">👥 Players<b id="players-count">0</b></div>
-            <div class="stat-box">🎯 Derash<b id="derash-amount">0</b></div>
-            <div class="stat-box">💵 Bet<b id="bet-amount">10</b></div>
-            <div class="stat-box">📢 Call Count<b id="call-count">0</b></div>
-        </div>
-        <div class="game-area">
-            <div class="bingo-card">
-                <div class="card-headers"><div>B</div><div>I</div><div>N</div><div>G</div><div>O</div></div>
-                <div class="card-grid" id="bingo-grid">
-                    <div style="grid-column: 1/-1; text-align: center; padding: 40px 10px; color: #999; font-size: 13px;" id="card-placeholder">
-                        🎫 ካርድ ለመግዛት ከታች "ካርድ ግዛ" ን ተጭነው/ቺው
-                    </div>
-                </div>
-            </div>
-            <div class="call-area">
-                <div class="current-call-box">
-                    <span>Current Call</span>
-                    <div class="big-circle" id="current-call">-</div>
-                </div>
-                <div class="recent-calls" id="recent-calls"></div>
-                <div class="game-status">
-                    <span>ሁኔታ፦</span>
-                    <span class="status-badge status-waiting" id="game-status-badge">በመጠበቅ</span>
-                </div>
-                <div class="message-box" id="status-message">
-                    🎫 ካርድ ገዝተው ጨዋታውን ይጀምሩ!
-                </div>
-            </div>
-        </div>
-        <div class="bottom-nav">
-            <button class="nav-btn" id="buy-card-btn" onclick="buyCard()">🎫 ካርድ ግዛ</button>
-            <button class="nav-btn" onclick="showToast('በቅርቡ ይመጣል!')">🏆 ሰንጠረዥ</button>
-            <button class="nav-btn" onclick="showToast('በቅርቡ ይመጣል!')">📜 ታሪክ</button>
-        </div>
-    </div>
+from database import engine, get_db, Base, SessionLocal
+from auth import verify_telegram_init_data
+import models
 
-    <div class="modal-overlay" id="depositModal">
-        <div class="modal-box">
-            <h2>💳 ባላንስ ለመሙላት</h2>
-            <p>እባክህ/ሽ ከታች ያለውን የአካውንት ቁጥር በመጠቀም ገንዘብ ያስተላልፉ።</p>
-            <div class="account-number">0912649315</div>
-            <div class="payment-options">
-                <button class="pay-btn pay-telebirr" onclick="selectPayment('ቴሌብር')">📱 ቴሌብር (Telebirr)</button>
-                <button class="pay-btn pay-cbe" onclick="selectPayment('ሲቢኢ ብር')">🏦 ሲቢኢ ብር (CBE Birr)</button>
-            </div>
-            <p style="font-size: 11px; color: #999;">ከተላለፉ በኋላ የደረሰኙን ወይም የትራንዛክሽን ቁጥር ያስገቡ።</p>
-            <button class="close-btn" onclick="closeDepositModal()">ዝጋ</button>
-        </div>
-    </div>
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-    <div class="modal-overlay" id="adminModal">
-        <div class="modal-box">
-            <h2>⚙️ የአስተዳዳሪ ፓነል</h2>
-            <div id="admin-content"><p>በመጫን ላይ...</p></div>
-            <button class="close-btn" onclick="closeAdminModal()">ዝጋ</button>
-        </div>
-    </div>
+secure_random = secrets.SystemRandom()
 
-    <button class="admin-panel-btn" id="adminPanelBtn" onclick="openAdminPanel()">
-        ⚙️
-        <span id="admin-badge" class="badge hidden">0</span>
-    </button>
+app = FastAPI(title="Bingo Game API")
 
-    <div class="toast" id="toast"></div>
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
+AUTO_MIGRATE = os.getenv("AUTO_MIGRATE", "false").lower() == "true"
+ALLOWED_ORIGINS_ENV = os.getenv("ALLOWED_ORIGINS", "")
+BOT_POLLING_ENABLED = os.getenv("BOT_POLLING_ENABLED", "true").lower() == "true"
 
-    <script>
-        if (!window.Telegram || !window.Telegram.WebApp) {
-            document.getElementById('errorScreen').classList.add('show');
-            throw new Error('Telegram WebApp not available');
-        }
-        const tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.ready();
-        if (!tg.initData || tg.initData.length === 0) {
-            setTimeout(() => document.getElementById('errorScreen').classList.add('show'), 500);
-            throw new Error('initData not available');
-        }
+if ENVIRONMENT == "production":
+    allowed_origins = [o.strip() for o in ALLOWED_ORIGINS_ENV.split(",") if o.strip()]
+    if not allowed_origins:
+        allowed_origins = ["https://web.telegram.org", "https://t.me"]
+        logger.warning("⚠️ ALLOWED_ORIGINS not set, using defaults")
+else:
+    allowed_origins = ["*"]
 
-        const API_BASE_URL = "https://mybingobot-1.onrender.com";
-        const MAX_DEPOSIT = 50000;
-        const MIN_DEPOSIT = 10;
-        const GAME_STATE_STALE_MS = 30000;
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "HEAD"],
+    allow_headers=["Content-Type", "X-Telegram-Init-Data"],
+)
 
-        let currentGameId = null;
-        let currentGameStatus = null;
-        let cardPrice = 10;
-        let myCardNumbers = [];
-        let lastCalledNumber = null;
-        let isAdmin = false;
-        let isBuying = false;
-        let isPolling = true;
-        let toastTimer = null;
-        let lastSuccessfulGameStateFetch = 0;
-        let loadGameRequestId = 0;
-        let cardError = false;
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+ADMIN_ID = os.getenv("ADMIN_ID", "")
 
-        let gameStateApplyToken = 0;
-        let gameStatePromise = null;
-        let gameStatePromiseGameId = null;
-        let gameStateForceQueued = false;
-        let myCardPromise = null;
-        let myCardPromiseGameId = null;
+ENGINE_LOCK_ID = 987654321
+GAME_CREATE_LOCK_ID = 987654322
+BOT_POLLING_LOCK_ID = 987654323
+WAITING_TIMEOUT_MINUTES = 30
+DRAW_INTERVAL_SECONDS = 5
+MAX_NUMBERS = 75
+MIN_DEPOSIT = 10
+MAX_DEPOSIT = 50000
 
-        let loadGamePromise = null;
-        let mePromise = null;
-        let adminBadgePromise = null;
-        let depositInFlight = false;
-        let adminActionInFlight = false;
+MIN_CARDS_TO_START = 2
 
-        function authHeaders() {
-            return { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': tg.initData || '' };
-        }
-        function showToast(msg, duration = 2500) {
-            const t = document.getElementById('toast');
-            t.innerText = msg;
-            t.classList.add('show');
-            clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => t.classList.remove('show'), duration);
-        }
-        
-        // ✅ አዲስ የተጨመረ፡ የዳታቤዝ ግንኙነት ሲቋረጥ እንደገና ለመሞከር የሚረዳ ተግባር
-        async function fetchWithRetry(url, options = {}, retries = 3, delay = 3000) {
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const res = await fetch(url, options);
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    return res;
-                } catch (err) {
-                    if (i === retries - 1) throw err;
-                    console.warn(`Fetch failed, retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
-                    await new Promise(r => setTimeout(r, delay));
-                }
-            }
-        }
+REQUIRED_TABLES = {
+    "users", "games", "cards",
+    "transactions", "audit_logs", "ledger_entries",
+}
 
-        function setStatusBadge(status) {
-            const badge = document.getElementById('game-status-badge');
-            badge.className = 'status-badge';
-            if (status === 'waiting') { badge.classList.add('status-waiting'); badge.innerText = 'በመጠበቅ'; }
-            else if (status === 'playing') { badge.classList.add('status-playing'); badge.innerText = 'በሂደት'; }
-            else if (status === 'finished') { badge.classList.add('status-finished'); badge.innerText = 'ተጠናቋል'; }
-            else if (status === 'cancelled') { badge.classList.add('status-finished'); badge.innerText = 'ተሰርዟል'; }
-            else if (status === 'error') { badge.classList.add('status-error'); badge.innerText = 'ስህተት'; }
-            else { badge.classList.add('status-waiting'); badge.innerText = 'በመጠበቅ'; }
-        }
-        function isGameTrusted() {
-            if (currentGameId === null) return false;
-            if (currentGameStatus === null) return false;
-            if ((Date.now() - lastSuccessfulGameStateFetch) > GAME_STATE_STALE_MS) return false;
-            return true;
-        }
-        function updateBuyButton() {
-            const btn = document.getElementById('buy-card-btn');
-            if (!btn) return;
-            if (currentGameId === null) {
-                btn.disabled = true;
-                btn.innerText = "🎫 ጨዋታ የለም";
-                return;
-            }
-            if (!isGameTrusted()) {
-                btn.disabled = true;
-                btn.innerText = "⏳ በመገናኘት ላይ...";
-                return;
-            }
-            if (cardError) {
-                btn.disabled = true;
-                btn.innerText = "⚠️ የካርድ ስህተት";
-                return;
-            }
-            const waiting = currentGameStatus === 'waiting';
-            const hasCard = myCardNumbers.length > 0;
-            if (isBuying) { btn.disabled = true; btn.innerHTML = '<span class="loading"></span>'; }
-            else if (hasCard) { btn.disabled = true; btn.innerText = "✅ ካርድ አለዎት"; }
-            else if (!waiting) { btn.disabled = true; btn.innerText = "🎫 ጨዋታ ተጀምሯል"; }
-            else { btn.disabled = false; btn.innerText = "🎫 ካርድ ግዛ"; }
-        }
-        function clearGameUI() {
-            currentGameId = null;
-            currentGameStatus = null;
-            myCardNumbers = [];
-            lastCalledNumber = null;
-            lastSuccessfulGameStateFetch = 0;
-            cardError = false;
-            document.getElementById('bingo-grid').innerHTML = `
-                <div style="grid-column: 1/-1; text-align: center; padding: 40px 10px; color: #999; font-size: 13px;">
-                    ⏳ አዲስ ጨዋታ በመጠበቅ ላይ...
-                </div>`;
-            document.getElementById('recent-calls').innerHTML = '';
-            document.getElementById('current-call').innerText = '-';
-            document.getElementById('players-count').innerText = '0';
-            document.getElementById('derash-amount').innerText = '0';
-            document.getElementById('call-count').innerText = '0';
-            document.getElementById('bet-amount').innerText = '10';
-            document.getElementById('status-message').innerText = '⏳ አዲስ ጨዋታ በመጠበቅ ላይ...';
-            setStatusBadge('waiting');
-            updateBuyButton();
-        }
-        function showGameError(message) {
-            document.getElementById('status-message').innerText = '⚠️ ' + message;
-            setStatusBadge('error');
-            currentGameStatus = null;
-            lastSuccessfulGameStateFetch = 0;
-            updateBuyButton();
-        }
+if not BOT_TOKEN:
+    logger.warning("⚠️ TELEGRAM_BOT_TOKEN is not set!")
+if not ADMIN_ID:
+    logger.warning("⚠️ ADMIN_ID is not set!")
 
-        async function loadCurrentGame() {
-            if (loadGamePromise) return loadGamePromise;
-            const promise = (async () => {
-                const reqId = ++loadGameRequestId;
-                try {
-                    // ✅ የተስተካከለ፡ fetchWithRetry መጠቀም
-                    const res = await fetchWithRetry(`${API_BASE_URL}/api/game/current/state`);
-                    const data = await res.json();
-                    if (reqId !== loadGameRequestId) return { ok: true, hasGame: false, stale: true };
-                    if (data.id) {
-                        if (currentGameId !== data.id) {
-                            currentGameId = data.id;
-                            currentGameStatus = null;
-                            myCardNumbers = [];
-                            lastCalledNumber = null;
-                            lastSuccessfulGameStateFetch = 0;
-                            cardError = false;
-                            myCardPromise = null;
-                            myCardPromiseGameId = null;
-                            gameStatePromise = null;
-                            gameStatePromiseGameId = null;
-                            gameStateForceQueued = false;
-                            document.getElementById('players-count').innerText = '0';
-                            document.getElementById('derash-amount').innerText = '0';
-                            document.getElementById('call-count').innerText = '0';
-                            document.getElementById('bet-amount').innerText = data.card_price || 10;
-                            document.getElementById('status-message').innerText = '⏳ የጨዋታ መረጃ በመጫን ላይ...';
-                            setStatusBadge('waiting');
-                            document.getElementById('bingo-grid').innerHTML = `
-                                <div style="grid-column: 1/-1; text-align: center; padding: 40px 10px; color: #999; font-size: 13px;">
-                                    🎫 ካርድ ለመግዛት ከታች "ካርድ ግዛ" ን ተጭነው/ቺው
-                                </div>`;
-                            document.getElementById('recent-calls').innerHTML = '';
-                            document.getElementById('current-call').innerText = '-';
-                            updateBuyButton();
-                        }
-                        cardPrice = data.card_price || 10;
-                        return { ok: true, hasGame: true };
-                    } else {
-                        if (currentGameId !== null) clearGameUI();
-                        else updateBuyButton();
-                        return { ok: true, hasGame: false };
-                    }
-                } catch (e) {
-                    console.error("loadCurrentGame:", e);
-                    lastSuccessfulGameStateFetch = 0;
-                    // ✅ ሰርቨሩ ሲነቃ የሚታይ መልእክት
-                    document.getElementById('status-message').innerText = '⏳ ሰርቨሩ በመነሳት ላይ ነው... እባክዎ ይጠብቁ (ለ1 ደቂቃ ያህል)';
-                    setStatusBadge('waiting');
-                    return { ok: false };
-                }
-            })();
-            loadGamePromise = promise;
-            try { return await promise; }
-            finally { if (loadGamePromise === promise) loadGamePromise = null; }
-        }
+logger.info(f"🌍 ENV: {ENVIRONMENT} | AUTO_MIGRATE: {AUTO_MIGRATE} | MIN_CARDS: {MIN_CARDS_TO_START}")
 
-        async function fetchMe() {
-            if (mePromise) return mePromise;
-            const promise = (async () => {
-                try {
-                    const res = await fetch(`${API_BASE_URL}/api/me`, { headers: authHeaders() });
-                    if (!res.ok) {
-                        if (res.status === 401 || res.status === 403) {
-                            document.getElementById('errorScreen').classList.add('show');
-                        }
-                        return;
-                    }
-                    const data = await res.json();
-                    document.getElementById('user-balance').innerText = data.balance + " ብር";
-                    isAdmin = data.is_admin === true;
-                    document.getElementById('adminPanelBtn').style.display = isAdmin ? 'block' : 'none';
-                    if (isAdmin) updateAdminBadge();
-                    else document.getElementById('admin-badge').classList.add('hidden');
-                } catch (e) { console.error("fetchMe:", e); }
-            })();
-            mePromise = promise;
-            try { return await promise; }
-            finally { if (mePromise === promise) mePromise = null; }
-        }
+bot = telebot.TeleBot(BOT_TOKEN) if BOT_TOKEN else None
 
-        async function updateAdminBadge() {
-            if (!isAdmin) return;
-            if (adminBadgePromise) return adminBadgePromise;
-            const promise = (async () => {
-                try {
-                    const res = await fetch(`${API_BASE_URL}/api/admin/pending`, { headers: authHeaders() });
-                    if (!res.ok) return;
-                    const data = await res.json();
-                    const badge = document.getElementById('admin-badge');
-                    const count = Array.isArray(data?.pending) ? data.pending.length : 0;
-                    if (count > 0) { badge.innerText = count; badge.classList.remove('hidden'); }
-                    else badge.classList.add('hidden');
-                } catch (e) {
-                    console.error("updateAdminBadge:", e);
-                    document.getElementById('admin-badge').classList.add('hidden');
-                }
-            })();
-            adminBadgePromise = promise;
-            try { return await promise; }
-            finally { if (adminBadgePromise === promise) adminBadgePromise = null; }
-        }
+if bot:
+    @bot.message_handler(commands=['start'])
+    def send_welcome(message):
+        bot.reply_to(message, "ሰላም! የቢንጎ ጨዋታ ቦት እንኳን ደህና መጣህ/ሽ!")
 
-        async function fetchMyCard() {
-            if (!currentGameId) return;
-            const requestedGameId = currentGameId;
+def run_bot():
+    if not bot or not BOT_POLLING_ENABLED:
+        return
+    dedicated_conn = None
+    got_lock = False
+    try:
+        dedicated_conn = engine.raw_connection()
+        cursor = dedicated_conn.cursor()
+        cursor.execute("SELECT pg_try_advisory_lock(%s)", (BOT_POLLING_LOCK_ID,))
+        got_lock = cursor.fetchone()[0]
+        cursor.close()
+        if not got_lock:
+            logger.info("ℹ️ Bot polling skipped (lock held by another worker)")
+            return
+        logger.info("✅ Bot polling started (this worker holds the lock)")
+        bot.polling(non_stop=True, timeout=30)
+    except Exception as e:
+        logger.error(f"Bot polling error: {e}")
+    finally:
+        if dedicated_conn:
+            try:
+                if got_lock:
+                    cursor = dedicated_conn.cursor()
+                    cursor.execute("SELECT pg_advisory_unlock(%s)", (BOT_POLLING_LOCK_ID,))
+                    dedicated_conn.commit()
+                    cursor.close()
+                    logger.info("✅ Bot advisory lock released")
+            except Exception as e:
+                logger.error(f"Failed to release bot lock: {e}")
+            finally:
+                try:
+                    dedicated_conn.close()
+                except Exception:
+                    pass
 
-            if (myCardPromise && myCardPromiseGameId === requestedGameId) {
-                return myCardPromise;
-            }
+def add_ledger(db, user, entry_type, amount, ref_type=None, ref_id=None, notes=None):
+    entry = models.LedgerEntry(
+        user_id=user.id, entry_type=entry_type, amount=amount,
+        balance_after=user.balance, reference_type=ref_type,
+        reference_id=str(ref_id) if ref_id is not None else None,
+        notes=notes,
+    )
+    db.add(entry)
+    return entry
 
-            const promise = (async () => {
-                try {
-                    const res = await fetch(`${API_BASE_URL}/api/my_card/${requestedGameId}`, { headers: authHeaders() });
-                    if (!res.ok) return;
-                    const data = await res.json();
-                    if (requestedGameId !== currentGameId) return;
-                    if (data.has_card) {
-                        renderBingoCard(data.numbers);
-                    } else {
-                        myCardNumbers = [];
-                        cardError = false;
-                        document.getElementById('bingo-grid').innerHTML = `
-                            <div style="grid-column: 1/-1; text-align: center; padding: 40px 10px; color: #999; font-size: 13px;" id="card-placeholder">
-                                🎫 ካርድ ለመግዛት ከታች "ካርድ ግዛ" ን ተጭነው/ቺው
-                            </div>`;
-                    }
-                    updateBuyButton();
-                } catch (e) { console.error("fetchMyCard:", e); }
-            })();
+def lock_user(db, user_id):
+    return db.query(models.User).filter(models.User.id == user_id).with_for_update().first()
 
-            myCardPromise = promise;
-            myCardPromiseGameId = requestedGameId;
-            try { return await promise; }
-            finally {
-                if (myCardPromise === promise) {
-                    myCardPromise = null;
-                    myCardPromiseGameId = null;
-                }
-            }
-        }
+def lock_game(db, game_id):
+    return db.query(models.Game).filter(models.Game.id == game_id).with_for_update().first()
 
-        async function fetchGameState(force = false) {
-            if (!currentGameId) return;
-            const requestedGameId = currentGameId;
+def get_admin_id():
+    return ADMIN_ID or None
 
-            if (gameStatePromise && gameStatePromiseGameId === requestedGameId) {
-                if (!force) return gameStatePromise;
-                if (gameStateForceQueued) return gameStatePromise;
-                gameStateForceQueued = true;
-                try { await gameStatePromise; } catch (_) {}
-                gameStateForceQueued = false;
-                if (requestedGameId !== currentGameId) return;
-            }
+def validate_bingo_card(nums: List[int]) -> tuple:
+    if not isinstance(nums, list) or len(nums) != 25:
+        return (False, "invalid_length")
+    if nums[12] != 0:
+        return (False, "center_not_free")
+    column_ranges = [(1, 15), (16, 30), (31, 45), (46, 60), (61, 75)]
+    for r in range(5):
+        for c in range(5):
+            i = r * 5 + c
+            if i == 12:
+                continue
+            n = nums[i]
+            if type(n) is not int:
+                return (False, f"non_integer_at_{i}")
+            if n == 0:
+                return (False, f"zero_at_{i}")
+            low, high = column_ranges[c]
+            if not (low <= n <= high):
+                return (False, f"out_of_range_at_{i}_value_{n}_col_{c}")
+    non_zero = [n for i, n in enumerate(nums) if i != 12]
+    if len(non_zero) != len(set(non_zero)):
+        return (False, "duplicate_numbers")
+    return (True, None)
 
-            const myToken = ++gameStateApplyToken;
-            const promise = (async () => {
-                try {
-                    const res = await fetchWithRetry(`${API_BASE_URL}/api/game/${requestedGameId}`);
-                    const data = await res.json();
+def check_card_winner(nums: List[int], called_set: set) -> bool:
+    is_valid, _ = validate_bingo_card(nums)
+    if not is_valid:
+        return False
+    grid = [nums[i * 5:(i + 1) * 5] for i in range(5)]
+    grid[2][2] = 0
+    if any(all(grid[r][c] == 0 or grid[r][c] in called_set for c in range(5)) for r in range(5)):
+        return True
+    if any(all(grid[r][c] == 0 or grid[r][c] in called_set for r in range(5)) for c in range(5)):
+        return True
+    if all(grid[i][i] == 0 or grid[i][i] in called_set for i in range(5)):
+        return True
+    if all(grid[i][4 - i] == 0 or grid[i][4 - i] in called_set for i in range(5)):
+        return True
+    return False
 
-                    if (requestedGameId !== currentGameId) return;
-                    if (myToken !== gameStateApplyToken) return;
-                    if (data.error) return;
-                    if (!['waiting', 'playing', 'finished', 'cancelled'].includes(data.status)) return;
+def parse_called_numbers(called_str: Optional[str]) -> Optional[set]:
+    if called_str is None or called_str.strip() == "":
+        return set()
+    parts = called_str.split(",")
+    called = set()
+    try:
+        for part in parts:
+            part = part.strip()
+            if not part:
+                return None
+            n = int(part)
+            if str(n) != part:
+                return None
+            if not 1 <= n <= MAX_NUMBERS:
+                return None
+            if n in called:
+                return None
+            called.add(n)
+    except (ValueError, TypeError):
+        return None
+    return called
 
-                    lastSuccessfulGameStateFetch = Date.now();
-                    currentGameStatus = data.status;
+async def get_current_user(x_telegram_init_data: str = Header(None), db: Session = Depends(get_db)):
+    if not BOT_TOKEN:
+        raise HTTPException(status_code=503, detail="የቦት ቶከን አልተዋቀረም")
+    if not x_telegram_init_data:
+        raise HTTPException(status_code=401, detail="የማንነት ማረጋገጫ የለም")
+    tg_user = verify_telegram_init_data(x_telegram_init_data, BOT_TOKEN)
+    if not tg_user:
+        raise HTTPException(status_code=401, detail="የተሳሳተ ማረጋገጫ")
+    tg_id = str(tg_user.get("id"))
+    user = db.query(models.User).filter(models.User.telegram_id == tg_id).first()
+    if not user:
+        try:
+            user = models.User(telegram_id=tg_id, username=tg_user.get("username"), balance=Decimal("0.00"))
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        except IntegrityError:
+            db.rollback()
+            user = db.query(models.User).filter(models.User.telegram_id == tg_id).first()
+            if not user:
+                raise HTTPException(status_code=500, detail="የተጠቃሚ ፍጠራ ስህተት")
+    if user.is_banned:
+        raise HTTPException(status_code=403, detail="አካውንትዎ ታግዷል")
+    return user
 
-                    document.getElementById('players-count').innerText = data.players_count || 0;
-                    document.getElementById('derash-amount').innerText = data.jackpot || 0;
-                    document.getElementById('call-count').innerText = data.call_count || 0;
-                    cardPrice = data.card_price || 10;
-                    document.getElementById('bet-amount').innerText = cardPrice;
-                    setStatusBadge(data.status);
-                    updateBuyButton();
+async def require_admin(user: models.User = Depends(get_current_user)):
+    aid = get_admin_id()
+    if not aid:
+        raise HTTPException(status_code=503, detail="ADMIN_ID አልተዋቀረም")
+    if user.telegram_id != aid:
+        raise HTTPException(status_code=403, detail="የAdmin ፈቃድ የለዎትም")
+    return user
 
-                    const el = document.getElementById('current-call');
-                    const calledArr = (typeof data.called_numbers === 'string' ? data.called_numbers : '')
-                        .split(',').map(s => s.trim()).filter(s => s !== '')
-                        .map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 75);
+class DepositRequest(BaseModel):
+    amount: Decimal = Field(..., ge=MIN_DEPOSIT, le=MAX_DEPOSIT, max_digits=12, decimal_places=2)
+    method: Literal["ቴሌብር", "ሲቢኢ ብር"]
+    reference: str = Field(..., min_length=1, max_length=100)
 
-                    let backendLast = null;
-                    if (data.last_number != null) {
-                        const n = Number(data.last_number);
-                        if (Number.isInteger(n) && n >= 1 && n <= 75) backendLast = n;
-                    }
+class BuyCardRequest(BaseModel):
+    game_id: int = Field(..., gt=0)
 
-                    if (calledArr.length === 0) {
-                        lastCalledNumber = null;
-                        el.innerText = '-';
-                    } else if (backendLast !== null) {
-                        if (String(backendLast) !== String(lastCalledNumber)) {
-                            lastCalledNumber = backendLast;
-                            el.innerText = backendLast;
-                            el.style.animation = 'none';
-                            setTimeout(() => el.style.animation = 'pulse 0.4s', 10);
-                        }
-                    } else {
-                        const fallback = calledArr[calledArr.length - 1];
-                        if (String(fallback) !== String(lastCalledNumber)) {
-                            lastCalledNumber = fallback;
-                            el.innerText = fallback;
-                        }
-                    }
+def _cancel_game_with_refund(db, game_id: int):
+    game = lock_game(db, game_id)
+    if not game or game.refunded:
+        return (0, True)
+    cards = db.query(models.Card).filter(
+        models.Card.game_id == game_id,
+        models.Card.refunded == False
+    ).with_for_update().all()
+    refunded_count = 0
+    for card in cards:
+        existing_refund = db.query(models.LedgerEntry).filter(
+            models.LedgerEntry.user_id == card.user_id,
+            models.LedgerEntry.entry_type == "refund",
+            models.LedgerEntry.reference_type == "card",
+            models.LedgerEntry.reference_id == str(card.id)
+        ).first()
+        if existing_refund:
+            ledger_amount = Decimal(str(existing_refund.amount))
+            card_amount = Decimal(str(card.price_paid))
+            if ledger_amount != card_amount:
+                logger.critical(f"Refund mismatch card={card.id}")
+                continue
+            card.refunded = True
+            card.refunded_at = datetime.now(timezone.utc)
+            refunded_count += 1
+            continue
+        nested = db.begin_nested()
+        try:
+            user = lock_user(db, card.user_id)
+            if not user:
+                nested.rollback()
+                continue
+            balance_before = Decimal(str(user.balance))
+            user.balance = balance_before + card.price_paid
+            add_ledger(db, user, "refund", card.price_paid, ref_type="card", ref_id=card.id, notes=f"ጨዋታ #{game_id} ሰረዘ")
+            nested.commit()
+            card.refunded = True
+            card.refunded_at = datetime.now(timezone.utc)
+            refunded_count += 1
+        except IntegrityError:
+            nested.rollback()
+            recheck = db.query(models.LedgerEntry).filter(
+                models.LedgerEntry.user_id == card.user_id,
+                models.LedgerEntry.entry_type == "refund",
+                models.LedgerEntry.reference_type == "card",
+                models.LedgerEntry.reference_id == str(card.id)
+            ).first()
+            if recheck:
+                if Decimal(str(recheck.amount)) != Decimal(str(card.price_paid)):
+                    continue
+                card.refunded = True
+                card.refunded_at = datetime.now(timezone.utc)
+                refunded_count += 1
+        except Exception as e:
+            nested.rollback()
+            logger.error(f"Refund error card {card.id}: {e}")
+    total_cards = db.query(models.Card).filter(models.Card.game_id == game_id).count()
+    refunded_total = db.query(models.Card).filter(
+        models.Card.game_id == game_id, models.Card.refunded == True
+    ).count()
+    is_complete = (total_cards == 0) or (refunded_total == total_cards)
+    if is_complete:
+        game.refunded = True
+        game.status = "cancelled"
+        game.finished_at = datetime.now(timezone.utc)
+    else:
+        logger.warning(f"Game {game_id}: {refunded_total}/{total_cards} refunded INCOMPLETE")
+    return (refunded_count, is_complete)
 
-                    if (data.called_numbers !== undefined) updateCalledNumbers(calledArr);
+@app.get("/")
+def read_root():
+    return FileResponse("templates/index.html")
 
-                    const msg = document.getElementById('status-message');
-                    if (data.status === "waiting") {
-                        msg.innerHTML = "🎫 ካርድ ገዝተው ጨዋታውን ይጀምሩ!<br><small>2 ካርድ ሲኖር ጨዋታው ይጀመራል</small>";
-                    } else if (data.status === "playing") {
-                        msg.innerHTML = "🎯 ጨዋታው በሂደት ላይ ነው!<br><small>ቁጥሮች በየ 5 ሰከንዱ ይጠራሉ</small>";
-                    } else if (data.status === "finished") {
-                        msg.innerHTML = "🏁 ጨዋታው ተጠናቋል!<br><small>ለቀጣዩ ጨዋታ ይጠብቁ</small>";
-                    } else if (data.status === "cancelled") {
-                        msg.innerHTML = "⚠️ ጨዋታው ተሰርዟል!<br><small>ገንዘብዎ ተመልሷል</small>";
-                    }
-                } catch (e) { console.error("fetchGameState:", e); }
-            })();
+@app.get("/api/status")
+def api_status():
+    return {"message": "የቢንጎ ጨዋታ ጀርባ ስርዓት እየሰራ ነው!"}
 
-            gameStatePromise = promise;
-            gameStatePromiseGameId = requestedGameId;
-            try { return await promise; }
-            finally {
-                if (gameStatePromise === promise) {
-                    gameStatePromise = null;
-                    gameStatePromiseGameId = null;
-                }
-            }
-        }
+@app.api_route("/api/health", methods=["GET", "HEAD"])
+def health_check():
+    try:
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        return {"status": "healthy", "database": "connected"}
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return JSONResponse(status_code=503, content={"status": "unhealthy", "error": str(e)})
 
-        function updateCalledNumbers(called) {
-            const rc = document.getElementById('recent-calls');
-            if (called.length === 0) {
-                rc.innerHTML = '';
-                document.querySelectorAll('#bingo-grid .cell').forEach((cell, i) => {
-                    cell.classList.remove('called');
-                    if (i === 12 && cell.innerText === 'FREE') cell.classList.add('marked', 'free');
-                    else cell.classList.remove('marked');
-                });
-                document.getElementById('current-call').innerText = '-';
-                lastCalledNumber = null;
-                return;
-            }
-            const recent = called.slice(-5).reverse();
-            rc.innerHTML = '';
-            recent.forEach(n => {
-                const d = document.createElement('div');
-                d.className = 'small-circle';
-                d.innerText = n;
-                rc.appendChild(d);
-            });
-            if (myCardNumbers.length > 0) {
-                const calledSet = new Set(called);
-                document.querySelectorAll('#bingo-grid .cell').forEach((cell, i) => {
-                    if (i === 12) { cell.classList.add('marked', 'free'); return; }
-                    const num = Number(cell.innerText);
-                    if (!Number.isInteger(num)) return;
-                    const isCalled = calledSet.has(num);
-                    cell.classList.toggle('called', isCalled);
-                    cell.classList.toggle('marked', isCalled);
-                });
-            }
-        }
+@app.get("/api/game/current/state")
+def get_or_create_current_game(db: Session = Depends(get_db)):
+    db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": GAME_CREATE_LOCK_ID})
+    game = db.query(models.Game).filter(
+        models.Game.status.in_(["waiting", "playing"])
+    ).order_by(models.Game.id.desc()).first()
+    if game and game.status == "waiting" and game.created_at:
+        if datetime.now(timezone.utc) - game.created_at > timedelta(minutes=WAITING_TIMEOUT_MINUTES):
+            _, is_complete = _cancel_game_with_refund(db, game.id)
+            if not is_complete:
+                logger.critical(f"Game {game.id} refund INCOMPLETE. Partial refunds kept.")
+                raise HTTPException(status_code=503, detail="የቀድሞ ጨዋታ ገንዘብ መመለስ አልተሟላም።")
+            game = None
+    if not game:
+        prev_game = db.query(models.Game).filter(
+            models.Game.rollover_jackpot > 0,
+            models.Game.status == "finished"
+        ).order_by(models.Game.id.desc()).with_for_update().first()
+        initial_jackpot = Decimal("0.00")
+        rollover_received = Decimal("0.00")
+        if prev_game and prev_game.rollover_jackpot > 0:
+            initial_jackpot = prev_game.rollover_jackpot
+            rollover_received = prev_game.rollover_jackpot
+            prev_game.rollover_jackpot = Decimal("0.00")
+            prev_game.rollover_transferred = True
+        game = models.Game(
+            status="waiting",
+            jackpot=initial_jackpot,
+            original_jackpot=initial_jackpot,
+            rollover_received=rollover_received,
+            card_price=Decimal("10.00")
+        )
+        db.add(game)
+    db.commit()
+    db.refresh(game)
+    player_count = db.query(models.Card).filter(models.Card.game_id == game.id).count()
+    return {
+        "id": game.id, "status": game.status,
+        "jackpot": float(game.jackpot or 0),
+        "card_price": float(game.card_price or 10),
+        "call_count": game.call_count,
+        "called_numbers": game.called_numbers or "",
+        "last_number": game.last_number,
+        "players_count": player_count
+    }
 
-        function validateCardNumbers(numbersStr) {
-            if (typeof numbersStr !== 'string') return null;
-            const raw = numbersStr.split(',').map(s => s.trim());
-            if (raw.length !== 25 || raw.some(s => s === '')) return null;
-            const nums = raw.map(Number);
-            if (nums.some(n => !Number.isInteger(n))) return null;
-            if (nums[12] !== 0) return null;
-            const ranges = [[1, 15], [16, 30], [31, 45], [46, 60], [61, 75]];
-            for (let row = 0; row < 5; row++) {
-                for (let col = 0; col < 5; col++) {
-                    const i = row * 5 + col;
-                    if (i === 12) continue;
-                    const n = nums[i];
-                    const [min, max] = ranges[col];
-                    if (n < min || n > max) return null;
-                }
-            }
-            const nonFree = nums.filter((_, i) => i !== 12);
-            if (new Set(nonFree).size !== 24) return null;
-            return nums;
-        }
+@app.get("/api/me")
+def get_me(user: models.User = Depends(get_current_user)):
+    aid = get_admin_id()
+    return {
+        "id": user.id, "telegram_id": user.telegram_id,
+        "username": user.username, "balance": float(user.balance),
+        "is_admin": bool(aid and user.telegram_id == aid)
+    }
 
-        function renderBingoCard(numbersStr) {
-            const nums = validateCardNumbers(numbersStr);
-            if (!nums) {
-                console.error("Invalid card data");
-                cardError = true;
-                myCardNumbers = [];
-                document.getElementById('bingo-grid').innerHTML = `
-                    <div style="grid-column: 1/-1; text-align: center; padding: 40px 10px; color: #d32f2f; font-size: 13px;" id="card-placeholder">
-                        ⚠️ የካርድ መረጃ ስህተት። ግዢ ተሰናክሏል።
-                    </div>`;
-                updateBuyButton();
-                return;
-            }
-            cardError = false;
-            const grid = document.getElementById('bingo-grid');
-            grid.innerHTML = '';
-            myCardNumbers = nums;
-            for (let i = 0; i < 25; i++) {
-                const cell = document.createElement('div');
-                cell.className = 'cell';
-                if (i === 12) {
-                    cell.innerText = 'FREE';
-                    cell.classList.add('marked', 'free');
-                } else {
-                    cell.innerText = nums[i] || '';
-                }
-                grid.appendChild(cell);
-            }
-        }
+@app.get("/api/my_card/{game_id}")
+def get_my_card(game_id: int, user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    card = db.query(models.Card).filter(
+        models.Card.user_id == user.id,
+        models.Card.game_id == game_id
+    ).first()
+    if not card:
+        return {"has_card": False}
+    return {"has_card": True, "card_id": card.id, "numbers": card.numbers, "is_winner": card.is_winner}
 
-        function openDepositModal() { document.getElementById('depositModal').classList.add('show'); }
-        function closeDepositModal() { document.getElementById('depositModal').classList.remove('show'); }
+@app.post("/api/deposit")
+def request_deposit(req: DepositRequest, user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    clean_reference = req.reference.strip()
+    if not clean_reference:
+        raise HTTPException(status_code=422, detail="የደረሰኝ ቁጥሩ ባዶ መሆን የለበትም")
+    new_trans = models.Transaction(
+        user_id=user.id, amount=Decimal(str(req.amount)),
+        method=req.method, reference=clean_reference, status="pending"
+    )
+    db.add(new_trans)
+    try:
+        db.commit()
+        db.refresh(new_trans)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="ይህ የደረሰኝ ቁጥር ተጠቅሟል!")
+    return {"message": "የክፍያ ጥያቄዎ ተልኳል።", "transaction_id": new_trans.id}
 
-        async function selectPayment(method) {
-            if (depositInFlight) { showToast("⏳ ቀድሞ የተላከ ጥያቄ በመካሄድ ላይ ነው"); return; }
-            const amountStr = prompt("ያስተላለፍከው/ሽውን ገንዘብ መጠን አስገባ (በብር):");
-            if (!amountStr) return;
-            const amount = Number(amountStr);
-            if (!/^\d+$/.test(amountStr.trim()) || amount < MIN_DEPOSIT || amount > MAX_DEPOSIT) {
-                showToast(`❌ መጠኑ ከ${MIN_DEPOSIT} ብር እስከ ${MAX_DEPOSIT} ብር መሆን አለበት`);
-                return;
-            }
-            const reference = prompt("የደረሰኙን ቁጥር (Transaction ID) አስገባ:");
-            if (!reference || reference.trim() === '') return;
-            closeDepositModal();
-            depositInFlight = true;
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/deposit`, {
-                    method: 'POST', headers: authHeaders(),
-                    body: JSON.stringify({ amount: amount, method: method, reference: reference.trim() })
-                });
-                let data = {};
-                try { data = await res.json(); } catch (_) { data = {}; }
-                if (res.ok) showToast("✅ የክፍያ ጥያቄዎ ተልኳል!");
-                else showToast("❌ " + (data.detail || `ስህተት (${res.status})`));
-            } catch (e) { showToast("❌ የኢንተርኔት ስህተት"); }
-            finally { depositInFlight = false; }
-        }
+@app.post("/api/buy_card")
+def buy_card(req: BuyCardRequest, user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    game = lock_game(db, req.game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="ጨዋታው አልተገኘም")
+    if game.status != "waiting":
+        raise HTTPException(status_code=400, detail="ጨዋታው ተጀምሯል ወይም ተጠናቋል")
+    locked_user = lock_user(db, user.id)
+    card_price = game.card_price or Decimal("10.00")
+    if locked_user.balance < card_price:
+        raise HTTPException(status_code=400, detail="በቂ ባላንስ የለዎትም")
+    existing_card = db.query(models.Card).filter(
+        models.Card.user_id == locked_user.id,
+        models.Card.game_id == req.game_id
+    ).first()
+    if existing_card:
+        raise HTTPException(status_code=400, detail="በዚህ ጨዋታ ካርድ ገዝተዋል")
+    columns = [
+        secure_random.sample(range(1, 16), 5),
+        secure_random.sample(range(16, 31), 5),
+        secure_random.sample(range(31, 46), 5),
+        secure_random.sample(range(46, 61), 5),
+        secure_random.sample(range(61, 76), 5),
+    ]
+    nums = [columns[c][r] for r in range(5) for c in range(5)]
+    nums[12] = 0
+    is_valid, err = validate_bingo_card(nums)
+    if not is_valid:
+        logger.critical(f"Card generation failed: {err}")
+        raise HTTPException(status_code=500, detail="የካርድ ፍጠራ ስህተት")
+    card_numbers = ",".join(map(str, nums))
+    nested = db.begin_nested()
+    try:
+        locked_user.balance = locked_user.balance - card_price
+        new_card = models.Card(
+            user_id=locked_user.id, game_id=req.game_id,
+            numbers=card_numbers, price_paid=card_price
+        )
+        db.add(new_card)
+        db.flush()
+        add_ledger(db, locked_user, "card_purchase", -card_price, ref_type="card", ref_id=new_card.id, notes=f"ጨዋታ #{game.id}")
+        nested.commit()
+    except IntegrityError:
+        nested.rollback()
+        raise HTTPException(status_code=400, detail="ድግግሞሽ ተገኝቷል!")
+    except Exception as e:
+        nested.rollback()
+        logger.error(f"Buy card error: {e}")
+        raise HTTPException(status_code=500, detail="የውስጥ ስህተት")
+    total_cards = db.query(models.Card).filter(models.Card.game_id == req.game_id).count()
+    game.jackpot = (game.jackpot or Decimal("0.00")) + card_price
+    if total_cards >= MIN_CARDS_TO_START and game.status == "waiting":
+        game.status = "playing"
+        game.started_at = datetime.now(timezone.utc)
+        game.last_drawn_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"message": "ካርድ ተገዝቷል!", "balance": float(locked_user.balance), "card": card_numbers}
 
-        async function buyCard() {
-            if (isBuying || currentGameStatus !== 'waiting' || myCardNumbers.length > 0) {
-                showToast("ካርድ መግዛት አይቻልም");
-                return;
-            }
-            if (!currentGameId) { showToast("ጨዋታው ገና አልተጫነም"); return; }
-            if (!isGameTrusted()) {
-                showToast("⏳ የጨዋታ ሁኔታ በመገናኘት ላይ ነው። እባክዎ ቆይተው ይሞክሩ።");
-                return;
-            }
-            if (cardError) { showToast("⚠️ የካርድ ስህተት — እባክዎ ገጹን ያድሱ"); return; }
-            isBuying = true;
-            updateBuyButton();
-            const gameId = currentGameId;
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/buy_card`, {
-                    method: 'POST', headers: authHeaders(),
-                    body: JSON.stringify({ game_id: gameId })
-                });
-                let data = {};
-                try { data = await res.json(); } catch (_) { data = {}; }
-                if (res.ok) {
-                    if (currentGameId === gameId) {
-                        showToast("🎉 ካርድ ገዝተዋል!");
-                        await fetchMe();
-                        await fetchMyCard();
-                        await fetchGameState(true);
-                    } else {
-                        showToast("የጨዋታ ሁኔታ ተቀይሯል። እባክዎ ያረጋግጡ።");
-                        await loadCurrentGame();
-                        await fetchMyCard();
-                        await fetchGameState(true);
-                    }
-                } else showToast("❌ " + (data.detail || `ስህተት (${res.status})`));
-            } catch (e) { showToast("❌ የኢንተርኔት ስህተት"); }
-            finally { isBuying = false; updateBuyButton(); }
-        }
+@app.get("/api/game/{game_id}")
+def get_game_state(game_id: int, db: Session = Depends(get_db)):
+    game = db.query(models.Game).filter(models.Game.id == game_id).first()
+    if not game:
+        return {"error": "ጨዋታው አልተገኘም"}
+    player_count = db.query(models.Card).filter(models.Card.game_id == game_id).count()
+    return {
+        "id": game.id, "status": game.status,
+        "jackpot": float(game.jackpot or 0),
+        "card_price": float(game.card_price or 10),
+        "call_count": game.call_count,
+        "called_numbers": game.called_numbers or "",
+        "last_number": game.last_number,
+        "players_count": player_count, "winner_id": game.winner_id
+    }
 
-        function openAdminPanel() {
-            document.getElementById('adminModal').classList.add('show');
-            fetchPendingDeposits();
-        }
-        function closeAdminModal() { document.getElementById('adminModal').classList.remove('show'); }
+# ✅ አዲስ: የሰንጠረዥ (Leaderboard) አድራሻ
+@app.get("/api/leaderboard")
+def get_leaderboard(db: Session = Depends(get_db)):
+    """ከፍተኛ ሽልማት ያገኙ ተጫዋቾች"""
+    results = db.query(
+        models.User.id,
+        models.User.telegram_id,
+        models.User.username,
+        func.coalesce(func.sum(models.LedgerEntry.amount), 0).label("total_won"),
+        func.count(models.LedgerEntry.id).label("win_count")
+    ).join(
+        models.LedgerEntry,
+        models.LedgerEntry.user_id == models.User.id
+    ).filter(
+        models.LedgerEntry.entry_type == "prize_payout"
+    ).group_by(
+        models.User.id, models.User.telegram_id, models.User.username
+    ).order_by(
+        func.sum(models.LedgerEntry.amount).desc()
+    ).limit(20).all()
 
-        async function fetchPendingDeposits() {
-            const content = document.getElementById('admin-content');
-            content.innerHTML = '<p>በመጫን ላይ...</p>';
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/admin/pending`, { headers: authHeaders() });
-                if (!res.ok) { content.innerHTML = '<p>❌ ፈቃድ የለዎትም</p>'; return; }
-                const data = await res.json();
-                if (!data.pending || data.pending.length === 0) {
-                    content.innerHTML = '<p>✅ ምንም የተጠባባቂ ክፍያ የለም።</p>';
-                    return;
-                }
-                content.innerHTML = '';
-                data.pending.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'admin-item';
-                    const pId = document.createElement('p'); pId.innerHTML = `<b>ID:</b> `;
-                    pId.appendChild(document.createTextNode(item.user_telegram_id));
-                    const pUser = document.createElement('p'); pUser.innerHTML = `<b>Username:</b> `;
-                    pUser.appendChild(document.createTextNode(item.username || 'N/A'));
-                    const pAmount = document.createElement('p'); pAmount.innerHTML = `<b>መጠን:</b> `;
-                    pAmount.appendChild(document.createTextNode(item.amount + ' ብር'));
-                    const pMethod = document.createElement('p'); pMethod.innerHTML = `<b>መንገድ:</b> `;
-                    pMethod.appendChild(document.createTextNode(item.method));
-                    const pRef = document.createElement('p'); pRef.innerHTML = `<b>ደረሰኝ:</b> `;
-                    pRef.appendChild(document.createTextNode(item.reference));
-                    const pDate = document.createElement('p'); pDate.innerHTML = `<b>ቀን:</b> `;
-                    pDate.appendChild(document.createTextNode(item.created_at));
-                    const btnApprove = document.createElement('button');
-                    btnApprove.className = 'approve-btn';
-                    btnApprove.textContent = '✅ ፍቀድ';
-                    btnApprove.onclick = () => approveDeposit(item.id, btnApprove, btnReject);
-                    const btnReject = document.createElement('button');
-                    btnReject.className = 'reject-btn';
-                    btnReject.textContent = '❌ ከልክል';
-                    btnReject.onclick = () => rejectDeposit(item.id, btnApprove, btnReject);
-                    div.appendChild(pId); div.appendChild(pUser); div.appendChild(pAmount);
-                    div.appendChild(pMethod); div.appendChild(pRef); div.appendChild(pDate);
-                    div.appendChild(btnApprove); div.appendChild(btnReject);
-                    content.appendChild(div);
-                });
-            } catch (e) { content.innerHTML = '<p>❌ ስህተት</p>'; }
-        }
+    leaderboard = []
+    for i, r in enumerate(results, 1):
+        username = r.username or f"User_{str(r.telegram_id)[-4:]}"
+        leaderboard.append({
+            "rank": i,
+            "username": username,
+            "total_won": float(r.total_won),
+            "win_count": int(r.win_count)
+        })
+    return {"leaderboard": leaderboard}
 
-        async function approveDeposit(id, btnApprove, btnReject) {
-            if (adminActionInFlight) { showToast("⏳ ቀድሞ የተላከ ክወና በመካሄድ ላይ ነው"); return; }
-            if (!confirm("ይህንን ክፍያ ፍቀድ?")) return;
-            adminActionInFlight = true;
-            if (btnApprove) btnApprove.disabled = true;
-            if (btnReject) btnReject.disabled = true;
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/admin/approve/${id}`, {
-                    method: 'POST', headers: authHeaders()
-                });
-                let data = {};
-                try { data = await res.json(); } catch (_) { data = {}; }
-                if (res.ok) {
-                    showToast("✅ ተፈቅዷል!");
-                    await fetchPendingDeposits();
-                    await fetchMe();
-                    await updateAdminBadge();
-                } else {
-                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`));
-                    if (btnApprove) btnApprove.disabled = false;
-                    if (btnReject) btnReject.disabled = false;
-                }
-            } catch (e) {
-                showToast("❌ ስህተት");
-                if (btnApprove) btnApprove.disabled = false;
-                if (btnReject) btnReject.disabled = false;
-            } finally { adminActionInFlight = false; }
-        }
+# ✅ አዲስ: የታሪክ (History) አድራሻ
+@app.get("/api/history")
+def get_history(
+    user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """የተጠቃሚው የግብይት ታሪክ"""
+    entries = db.query(models.LedgerEntry).filter(
+        models.LedgerEntry.user_id == user.id
+    ).order_by(models.LedgerEntry.created_at.desc()).limit(50).all()
 
-        async function rejectDeposit(id, btnApprove, btnReject) {
-            if (adminActionInFlight) { showToast("⏳ ቀድሞ የተላከ ክወና በመካሄድ ላይ ነው"); return; }
-            if (!confirm("ይህንን ክፍያ ከልክል?")) return;
-            adminActionInFlight = true;
-            if (btnApprove) btnApprove.disabled = true;
-            if (btnReject) btnReject.disabled = true;
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/admin/reject/${id}`, {
-                    method: 'POST', headers: authHeaders()
-                });
-                let data = {};
-                try { data = await res.json(); } catch (_) { data = {}; }
-                if (res.ok) {
-                    showToast("✅ ተከልክሏል!");
-                    await fetchPendingDeposits();
-                    await updateAdminBadge();
-                } else {
-                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`));
-                    if (btnApprove) btnApprove.disabled = false;
-                    if (btnReject) btnReject.disabled = false;
-                }
-            } catch (e) {
-                showToast("❌ ስህተት");
-                if (btnApprove) btnApprove.disabled = false;
-                if (btnReject) btnReject.disabled = false;
-            } finally { adminActionInFlight = false; }
-        }
+    history = []
+    for e in entries:
+        history.append({
+            "id": e.id,
+            "type": e.entry_type,
+            "amount": float(e.amount),
+            "balance_after": float(e.balance_after),
+            "notes": e.notes,
+            "created_at": e.created_at.strftime("%Y-%m-%d %H:%M") if e.created_at else ""
+        })
+    return {"history": history}
 
-        function shouldPoll() {
-            return isPolling && document.visibilityState === 'visible';
-        }
-        async function pollGameState() {
-            if (!shouldPoll()) { setTimeout(pollGameState, 3000); return; }
-            await fetchGameState();
-            setTimeout(pollGameState, 3000);
-        }
-        async function pollMyCard() {
-            if (!shouldPoll()) { setTimeout(pollMyCard, 10000); return; }
-            await fetchMyCard();
-            setTimeout(pollMyCard, 10000);
-        }
-        async function pollCurrentGame() {
-            if (!shouldPoll()) { setTimeout(pollCurrentGame, 15000); return; }
-            await loadCurrentGame();
-            setTimeout(pollCurrentGame, 15000);
-        }
-        async function pollMe() {
-            if (!shouldPoll()) { setTimeout(pollMe, 15000); return; }
-            await fetchMe();
-            setTimeout(pollMe, 15000);
-        }
-        async function pollAdminBadge() {
-            if (!shouldPoll()) { setTimeout(pollAdminBadge, 15000); return; }
-            await updateAdminBadge();
-            setTimeout(pollAdminBadge, 15000);
-        }
+@app.get("/api/admin/pending")
+def get_pending_deposits(admin: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    pending = db.query(models.Transaction).filter(
+        models.Transaction.status == "pending"
+    ).order_by(models.Transaction.created_at.asc()).all()
+    result = []
+    for t in pending:
+        u = db.query(models.User).filter(models.User.id == t.user_id).first()
+        result.append({
+            "id": t.id, "user_telegram_id": u.telegram_id if u else "Unknown",
+            "username": u.username if u else None,
+            "amount": float(t.amount), "method": t.method, "reference": t.reference,
+            "created_at": t.created_at.strftime("%Y-%m-%d %H:%M") if t.created_at else ""
+        })
+    return {"pending": result}
 
-        window.onload = async function() {
-            // ✅ የመጀመሪያ ጭነት (Initial Load) - ሰርቨሩ እስኪነቃ ድረስ ይጠብቃል
-            let result = await loadCurrentGame();
-            let retries = 0;
-            while (!result.ok && retries < 5) {
-                console.log(`Waiting for server to wake up... Attempt ${retries + 1}`);
-                await new Promise(r => setTimeout(r, 10000)); // 10 ሰከንድ ይጠብቃል
-                result = await loadCurrentGame();
-                retries++;
-            }
-            
-            if (!result.ok) showToast("⚠️ ሰርቨሩ ሊነቃ አልቻለም። እባክዎ ቆይተው እንደገና ይሞክሩ።");
-            
-            await fetchMe();
-            await fetchMyCard();
-            await fetchGameState();
-            pollGameState();
-            pollMyCard();
-            pollCurrentGame();
-            pollMe();
-            pollAdminBadge();
-        };
-    </script>
-</body>
-</html>
+@app.post("/api/admin/approve/{transaction_id}")
+def approve_deposit(transaction_id: int, admin: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    trans = db.query(models.Transaction).filter(
+        models.Transaction.id == transaction_id
+    ).with_for_update().first()
+    if not trans:
+        raise HTTPException(status_code=404, detail="ግብይቱ አልተገኘም")
+    if trans.status != "pending":
+        raise HTTPException(status_code=400, detail=f"ግብይቱ {trans.status} ነው")
+    if trans.amount < MIN_DEPOSIT or trans.amount > MAX_DEPOSIT:
+        raise HTTPException(status_code=400, detail="የተሳሳተ መጠን")
+    user = lock_user(db, trans.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="ተጠቃሚው አልተገኘም")
+    nested = db.begin_nested()
+    try:
+        user.balance = user.balance + trans.amount
+        add_ledger(db, user, "deposit_approved", trans.amount, ref_type="transaction", ref_id=trans.id, notes=trans.method)
+        trans.status = "approved"
+        trans.reviewed_by = admin.telegram_id
+        trans.reviewed_at = datetime.now(timezone.utc)
+        db.add(models.AuditLog(
+            actor_id=admin.telegram_id, action="approve_deposit",
+            target_type="transaction", target_id=str(trans.id),
+            details=f"amount={trans.amount}, user_id={user.telegram_id}"
+        ))
+        nested.commit()
+    except IntegrityError:
+        nested.rollback()
+        raise HTTPException(status_code=400, detail="ግብይቱ አስቀድሞ ጸድቋል")
+    db.commit()
+    return {"message": "ጸድቋል!", "new_balance": float(user.balance)}
+
+@app.post("/api/admin/reject/{transaction_id}")
+def reject_deposit(transaction_id: int, admin: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    trans = db.query(models.Transaction).filter(
+        models.Transaction.id == transaction_id
+    ).with_for_update().first()
+    if not trans:
+        raise HTTPException(status_code=404, detail="ግብይቱ አልተገኘም")
+    if trans.status != "pending":
+        raise HTTPException(status_code=400, detail=f"ግብይቱ {trans.status} ነው")
+    trans.status = "rejected"
+    trans.reviewed_by = admin.telegram_id
+    trans.reviewed_at = datetime.now(timezone.utc)
+    db.add(models.AuditLog(
+        actor_id=admin.telegram_id, action="reject_deposit",
+        target_type="transaction", target_id=str(trans.id)
+    ))
+    db.commit()
+    return {"message": "ተከልክሏል!"}
+
+@app.post("/api/admin/recover_game/{game_id}")
+def recover_game(game_id: int, admin: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    game = lock_game(db, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="ጨዋታው አልተገኘም")
+    if game.payout_completed:
+        return {"message": "ጨዋታው አስቀድሞ ተጠናቋል", "status": game.status}
+    if game.status != "playing":
+        return {"message": f"ጨዋታው '{game.status}' ሁኔታ ላይ ነው።", "payout_completed": False, "recovery_allowed": False, "reason": f"invalid_status:{game.status}"}
+    payouts = db.query(models.LedgerEntry).filter(
+        models.LedgerEntry.entry_type == "prize_payout",
+        models.LedgerEntry.reference_type == "game",
+        models.LedgerEntry.reference_id == str(game.id)
+    ).all()
+    if not payouts:
+        return {"message": "ምንም የpayout መዝገብ የለም", "payout_completed": False, "recovery_allowed": False, "reason": "no_payouts"}
+    called_set = parse_called_numbers(game.called_numbers)
+    if called_set is None:
+        return {"message": "⚠️ called_numbers ቅርጸት ትክክል አይደለም", "payout_completed": False, "recovery_allowed": False, "reason": "invalid_called_numbers"}
+    payout_total = sum(Decimal(str(p.amount)) for p in payouts)
+    expected_jackpot = Decimal(str(game.original_jackpot or "0.00"))
+    if expected_jackpot == Decimal("0.00") and payout_total > Decimal("0.00"):
+        expected_jackpot = payout_total
+    jackpot_match = payout_total == expected_jackpot
+    winner_issues = []
+    user_payout_count = {}
+    for p in payouts:
+        if Decimal(str(p.amount)) < Decimal("0.00"):
+            winner_issues.append({"user_id": p.user_id, "issue": "negative_payout", "amount": float(p.amount)})
+            continue
+        user_payout_count[p.user_id] = user_payout_count.get(p.user_id, 0) + 1
+        card = db.query(models.Card).filter(
+            models.Card.user_id == p.user_id, models.Card.game_id == game.id, models.Card.refunded == False
+        ).first()
+        if not card:
+            winner_issues.append({"user_id": p.user_id, "issue": "no_card_found"})
+            continue
+        if not card.is_winner:
+            winner_issues.append({"user_id": p.user_id, "card_id": card.id, "issue": "is_winner_flag_false"})
+            continue
+        try:
+            nums = [int(x) for x in card.numbers.split(",")]
+        except (ValueError, AttributeError):
+            winner_issues.append({"user_id": p.user_id, "card_id": card.id, "issue": "invalid_card_numbers"})
+            continue
+        is_valid, err = validate_bingo_card(nums)
+        if not is_valid:
+            winner_issues.append({"user_id": p.user_id, "card_id": card.id, "issue": f"invalid_card:{err}"})
+            continue
+        if not check_card_winner(nums, called_set):
+            winner_issues.append({"user_id": p.user_id, "card_id": card.id, "issue": "not_actual_bingo_winner"})
+    for uid, cnt in user_payout_count.items():
+        if cnt > 1:
+            winner_issues.append({"user_id": uid, "issue": "duplicate_payout_per_user", "count": cnt})
+    balance_issues = []
+    unique_user_ids = {p.user_id for p in payouts}
+    for uid in unique_user_ids:
+        user = db.query(models.User).filter(models.User.id == uid).first()
+        if not user:
+            balance_issues.append({"user_id": uid, "issue": "user_not_found"})
+            continue
+        ledger_sum = db.query(func.coalesce(func.sum(models.LedgerEntry.amount), 0)).filter(
+            models.LedgerEntry.user_id == uid
+        ).scalar()
+        ledger_sum = Decimal(str(ledger_sum or "0.00"))
+        if ledger_sum != Decimal(str(user.balance)):
+            balance_issues.append({"user_id": user.telegram_id, "balance": float(user.balance), "ledger_sum": float(ledger_sum), "issue": "balance_mismatch"})
+    refunded_cards = db.query(models.Card).filter(models.Card.game_id == game.id, models.Card.refunded == True).count()
+    winners_card_count = db.query(models.Card).filter(
+        models.Card.game_id == game.id, models.Card.is_winner == True, models.Card.refunded == False
+    ).count()
+    payout_count_match = winners_card_count == len(payouts)
+    all_checks_pass = (
+        jackpot_match and len(winner_issues) == 0 and len(balance_issues) == 0
+        and refunded_cards == 0 and payout_count_match
+    )
+    result = {
+        "game_id": game.id, "payout_count": len(payouts),
+        "payout_total": float(payout_total), "expected_jackpot": float(expected_jackpot),
+        "jackpot_match": jackpot_match, "winner_issues": winner_issues,
+        "balance_issues": balance_issues, "refunded_cards": refunded_cards,
+        "all_checks_pass": all_checks_pass, "recovery_allowed": all_checks_pass,
+    }
+    if all_checks_pass:
+        game.payout_completed = True
+        game.status = "finished"
+        game.finished_at = datetime.now(timezone.utc)
+        game.jackpot = Decimal("0.00")
+        if payouts:
+            first_payout = min(payouts, key=lambda p: p.id)
+            game.winner_id = first_payout.user_id
+        db.add(models.AuditLog(
+            actor_id=admin.telegram_id, action="recover_game",
+            target_type="game", target_id=str(game.id), details=f"Recovery SUCCESS. total={payout_total}"
+        ))
+        db.commit()
+        result["message"] = "✅ ጨዋታው በተሳካ ሁኔታ ተጠናቋል"
+        result["payout_completed"] = True
+    else:
+        result["message"] = "⚠️ የገንዘብ ማረጋገጫዎች አልተሟሉም።"
+        result["payout_completed"] = False
+    return result
+
+@app.get("/api/admin/reconcile")
+def reconcile(admin: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    issues = []
+    users = db.query(models.User).all()
+    balance_mismatches = []
+    for u in users:
+        ledger_sum = db.query(func.coalesce(func.sum(models.LedgerEntry.amount), 0)).filter(
+            models.LedgerEntry.user_id == u.id
+        ).scalar()
+        ledger_sum = Decimal(str(ledger_sum or "0.00"))
+        if ledger_sum != Decimal(str(u.balance)):
+            balance_mismatches.append({"user_id": u.telegram_id, "balance": float(u.balance), "ledger_sum": float(ledger_sum)})
+    if balance_mismatches:
+        issues.append({"type": "balance_vs_ledger", "count": len(balance_mismatches), "details": balance_mismatches[:50]})
+    approved_trans = db.query(models.Transaction).filter(models.Transaction.status == "approved").all()
+    transaction_issues = []
+    for t in approved_trans:
+        ledgers = db.query(models.LedgerEntry).filter(
+            models.LedgerEntry.entry_type == "deposit_approved",
+            models.LedgerEntry.reference_type == "transaction",
+            models.LedgerEntry.reference_id == str(t.id)
+        ).all()
+        if len(ledgers) != 1:
+            transaction_issues.append({"transaction_id": t.id, "issue": "missing_ledger" if len(ledgers) == 0 else "duplicate_ledger"})
+            continue
+        ledger = ledgers[0]
+        problems = []
+        if ledger.user_id != t.user_id:
+            problems.append("user_id_mismatch")
+        if Decimal(str(ledger.amount)) != Decimal(str(t.amount)):
+            problems.append("amount_mismatch")
+        if problems:
+            transaction_issues.append({"transaction_id": t.id, "issue": problems})
+    if transaction_issues:
+        issues.append({"type": "transaction_ledger_mismatch", "count": len(transaction_issues), "details": transaction_issues[:50]})
+    orphan_ledgers = []
+    approved_ids = {t.id for t in approved_trans}
+    all_deposit_ledgers = db.query(models.LedgerEntry).filter(
+        models.LedgerEntry.entry_type == "deposit_approved",
+        models.LedgerEntry.reference_type == "transaction"
+    ).all()
+    for ledger in all_deposit_ledgers:
+        try:
+            trans_id = int(ledger.reference_id) if ledger.reference_id else None
+        except (ValueError, TypeError):
+            trans_id = None
+        if trans_id is None or trans_id not in approved_ids:
+            orphan_ledgers.append({"ledger_id": ledger.id, "reference_id": ledger.reference_id})
+    if orphan_ledgers:
+        issues.append({"type": "orphan_deposit_ledgers", "count": len(orphan_ledgers), "details": orphan_ledgers[:50]})
+    all_games = db.query(models.Game).order_by(models.Game.id.asc()).all()
+    game_mismatches = []
+    for g in all_games:
+        if g.status == "cancelled":
+            total_cards = db.query(models.Card).filter(models.Card.game_id == g.id).count()
+            refunded_cards = db.query(models.Card).filter(models.Card.game_id == g.id, models.Card.refunded == True).count()
+            if total_cards > 0 and refunded_cards != total_cards:
+                game_mismatches.append({"game_id": g.id, "issue": "incomplete_refund"})
+            if total_cards > 0 and refunded_cards == total_cards and not g.refunded:
+                game_mismatches.append({"game_id": g.id, "issue": "refunded_flag_mismatch"})
+        elif g.status in ["waiting", "playing"]:
+            cards_total = db.query(func.coalesce(func.sum(models.Card.price_paid), 0)).filter(
+                models.Card.game_id == g.id, models.Card.refunded == False
+            ).scalar()
+            cards_total = Decimal(str(cards_total or "0.00"))
+            current_jackpot = Decimal(str(g.jackpot or "0.00"))
+            rollover_received = Decimal(str(g.rollover_received or "0.00"))
+            expected_jackpot = rollover_received + cards_total
+            if current_jackpot != expected_jackpot:
+                game_mismatches.append({"game_id": g.id, "issue": "jackpot_mismatch", "current": float(current_jackpot), "expected": float(expected_jackpot)})
+        elif g.status == "finished":
+            payouts = db.query(models.LedgerEntry).filter(
+                models.LedgerEntry.entry_type == "prize_payout",
+                models.LedgerEntry.reference_type == "game",
+                models.LedgerEntry.reference_id == str(g.id)
+            ).all()
+            if not g.payout_completed:
+                if payouts:
+                    game_mismatches.append({"game_id": g.id, "issue": "payout_exists_but_not_completed", "recovery_endpoint": f"/api/admin/recover_game/{g.id}"})
+                else:
+                    game_mismatches.append({"game_id": g.id, "issue": "finished_but_not_completed"})
+            else:
+                if payouts:
+                    payout_user_ids = []
+                    for p in payouts:
+                        if Decimal(str(p.amount)) < Decimal("0.00"):
+                            game_mismatches.append({"game_id": g.id, "issue": "negative_payout", "ledger_id": p.id})
+                        winner_card = db.query(models.Card).filter(
+                            models.Card.user_id == p.user_id, models.Card.game_id == g.id,
+                            models.Card.is_winner == True, models.Card.refunded == False
+                        ).first()
+                        if not winner_card:
+                            game_mismatches.append({"game_id": g.id, "issue": "payout_without_winner_card", "user_id": p.user_id})
+                        payout_user_ids.append(p.user_id)
+                    if len(payout_user_ids) != len(set(payout_user_ids)):
+                        game_mismatches.append({"game_id": g.id, "issue": "duplicate_payout_per_user"})
+                    payout_sum = sum(Decimal(str(p.amount)) for p in payouts)
+                    rollover_received = Decimal(str(g.rollover_received or "0.00"))
+                    cards_total = db.query(func.coalesce(func.sum(models.Card.price_paid), 0)).filter(
+                        models.Card.game_id == g.id, models.Card.refunded == False
+                    ).scalar()
+                    cards_total = Decimal(str(cards_total or "0.00"))
+                    expected_total = rollover_received + cards_total
+                    if payout_sum != expected_total:
+                        game_mismatches.append({"game_id": g.id, "issue": "payout_sum_mismatch", "payout_sum": float(payout_sum), "expected": float(expected_total)})
+                    if g.winner_id is None:
+                        game_mismatches.append({"game_id": g.id, "issue": "payout_without_winner_id"})
+                    elif g.winner_id not in payout_user_ids:
+                        game_mismatches.append({"game_id": g.id, "issue": "winner_id_not_in_payouts"})
+                else:
+                    transferred = getattr(g, "rollover_transferred", False)
+                    rollover_j = Decimal(str(g.rollover_jackpot or "0.00"))
+                    if rollover_j <= Decimal("0.00") and not transferred:
+                        game_mismatches.append({"game_id": g.id, "issue": "finished_no_winner_no_rollover"})
+    if game_mismatches:
+        issues.append({"type": "game_state_mismatch", "count": len(game_mismatches), "details": game_mismatches[:50]})
+    duplicate_entries = db.query(
+        models.LedgerEntry.user_id, models.LedgerEntry.entry_type,
+        models.LedgerEntry.reference_type, models.LedgerEntry.reference_id,
+        func.count(models.LedgerEntry.id).label("cnt")
+    ).group_by(
+        models.LedgerEntry.user_id, models.LedgerEntry.entry_type,
+        models.LedgerEntry.reference_type, models.LedgerEntry.reference_id
+    ).having(func.count(models.LedgerEntry.id) > 1).all()
+    if duplicate_entries:
+        issues.append({"type": "duplicate_ledger_entries", "count": len(duplicate_entries),
+            "details": [{"user_id": d.user_id, "entry_type": d.entry_type, "reference_id": d.reference_id, "count": d.cnt} for d in duplicate_entries[:50]]})
+    return {
+        "checked_users": len(users), "checked_games": len(all_games),
+        "checked_transactions": len(approved_trans),
+        "issues_found": len(issues), "issues": issues
+    }
+
+def bingo_engine_loop():
+    while True:
+        try:
+            time.sleep(DRAW_INTERVAL_SECONDS)
+        except Exception as e:
+            logger.error(f"Sleep error: {e}")
+            continue
+        dedicated_conn = None
+        got_lock = False
+        try:
+            try:
+                dedicated_conn = engine.raw_connection()
+            except (OperationalError, DBAPIError) as db_err:
+                logger.warning(f"⚠️ Engine DB connection failed: {db_err}. Retrying in next tick...")
+                continue
+            cursor = dedicated_conn.cursor()
+            cursor.execute("SELECT pg_try_advisory_lock(%s)", (ENGINE_LOCK_ID,))
+            got_lock = cursor.fetchone()[0]
+            cursor.close()
+            if not got_lock:
+                continue
+            db = SessionLocal()
+            try:
+                process_engine_tick(db)
+                db.commit()
+            except Exception as tick_error:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                logger.error(f"Engine tick error: {tick_error}")
+            finally:
+                try:
+                    db.close()
+                except Exception:
+                    pass
+        except Exception as fatal_error:
+            logger.error(f"Engine fatal error: {fatal_error}")
+        finally:
+            if dedicated_conn:
+                try:
+                    if got_lock:
+                        cursor = dedicated_conn.cursor()
+                        cursor.execute("SELECT pg_advisory_unlock(%s)", (ENGINE_LOCK_ID,))
+                        dedicated_conn.commit()
+                        cursor.close()
+                except Exception as e:
+                    logger.error(f"Engine unlock error: {e}")
+                finally:
+                    try:
+                        dedicated_conn.close()
+                    except Exception:
+                        pass
+
+def process_engine_tick(db):
+    old_games = db.query(models.Game).filter(models.Game.status == "waiting").all()
+    for og in old_games:
+        if og.created_at and datetime.now(timezone.utc) - og.created_at > timedelta(minutes=WAITING_TIMEOUT_MINUTES):
+            _, is_complete = _cancel_game_with_refund(db, og.id)
+            if not is_complete:
+                logger.critical(f"Game {og.id} refund INCOMPLETE")
+    games = db.query(models.Game).filter(models.Game.status == "playing").with_for_update().all()
+    for game in games:
+        existing_payout = db.query(models.LedgerEntry.id).filter(
+            models.LedgerEntry.entry_type == "prize_payout",
+            models.LedgerEntry.reference_type == "game",
+            models.LedgerEntry.reference_id == str(game.id)
+        ).first()
+        if existing_payout and not game.payout_completed:
+            logger.critical(f"Game {game.id} FROZEN.")
+            continue
+        if game.last_drawn_at:
+            elapsed = (datetime.now(timezone.utc) - game.last_drawn_at).total_seconds()
+            if elapsed < DRAW_INTERVAL_SECONDS:
+                continue
+        called_set = parse_called_numbers(game.called_numbers)
+        if called_set is None:
+            logger.error(f"Game {game.id} corrupt called_numbers: '{game.called_numbers}'. Skipping draw.")
+            continue
+        called_list = sorted(called_set)
+        if len(called_list) >= MAX_NUMBERS:
+            _finish_game_no_winner(db, game)
+            continue
+        available = [n for n in range(1, MAX_NUMBERS + 1) if n not in called_set]
+        if not available:
+            _finish_game_no_winner(db, game)
+            continue
+        new_num = secure_random.choice(available)
+        called_list.append(new_num)
+        game.called_numbers = ",".join(str(x) for x in called_list)
+        game.last_number = new_num
+        game.call_count = len(called_list)
+        game.last_drawn_at = datetime.now(timezone.utc)
+        check_winners(db, game, set(called_list))
+
+def _finish_game_no_winner(db, game):
+    if game.payout_completed:
+        return
+    game.original_jackpot = game.jackpot or Decimal("0.00")
+    game.rollover_jackpot = (game.rollover_jackpot or Decimal("0.00")) + (game.jackpot or Decimal("0.00"))
+    game.jackpot = Decimal("0.00")
+    game.payout_completed = True
+    game.status = "finished"
+    game.finished_at = datetime.now(timezone.utc)
+
+def check_winners(db, game, called_set):
+    if game.payout_completed or game.status != "playing":
+        return
+    game = lock_game(db, game.id)
+    if not game or game.payout_completed or game.status != "playing":
+        return
+    existing_payouts = db.query(models.LedgerEntry).filter(
+        models.LedgerEntry.entry_type == "prize_payout",
+        models.LedgerEntry.reference_type == "game",
+        models.LedgerEntry.reference_id == str(game.id)
+    ).all()
+    if existing_payouts:
+        logger.critical(f"Game {game.id} existing payouts.")
+        return
+    cards = db.query(models.Card).filter(
+        models.Card.game_id == game.id, models.Card.refunded.is_(False)
+    ).order_by(models.Card.id.asc()).with_for_update().all()
+    winners = []
+    for card in cards:
+        try:
+            nums = [int(x) for x in card.numbers.split(",")]
+        except (ValueError, AttributeError):
+            continue
+        if check_card_winner(nums, called_set):
+            winners.append(card)
+    if not winners:
+        return
+    jackpot = Decimal(str(game.jackpot or "0.00")).quantize(Decimal("0.01"))
+    if jackpot <= Decimal("0.00"):
+        logger.critical(f"Game {game.id}: jackpot {jackpot}.")
+        return
+    winners.sort(key=lambda c: c.id)
+    n = len(winners)
+    share = (jackpot / Decimal(n)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+    remainder = jackpot - (share * n)
+    payout_plan = []
+    for i, card in enumerate(winners):
+        amount = share + (remainder if i == 0 else Decimal("0.00"))
+        payout_plan.append((card, amount))
+    total_paid = Decimal("0.00")
+    for card, amount in payout_plan:
+        user = lock_user(db, card.user_id)
+        if not user:
+            raise RuntimeError(f"Winner user {card.user_id} not found")
+        if card.game_id != game.id:
+            raise RuntimeError(f"Card {card.id} wrong game")
+        user.balance = Decimal(str(user.balance)) + amount
+        add_ledger(db, user, "prize_payout", amount, ref_type="game", ref_id=game.id, notes=f"payout card {card.id} of game {game.id}")
+        card.is_winner = True
+        total_paid += amount
+    if total_paid != jackpot:
+        raise RuntimeError(f"Payout total {total_paid} != jackpot {jackpot}")
+    game.winner_id = winners[0].user_id
+    game.status = "finished"
+    game.finished_at = datetime.now(timezone.utc)
+    game.payout_completed = True
+    game.original_jackpot = jackpot
+    game.jackpot = Decimal("0.00")
+    logger.info(f"Game {game.id}: payout complete. winners={n}, total={total_paid}")
+
+def validate_schema():
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names(schema="public"))
+    missing_tables = sorted(REQUIRED_TABLES - existing_tables)
+    if missing_tables:
+        return (False, f"Missing tables: {missing_tables}")
+    required_columns = {
+        "users": {"id", "telegram_id", "balance", "is_banned", "created_at"},
+        "games": {"id", "status", "jackpot", "original_jackpot", "rollover_jackpot",
+                  "rollover_received", "rollover_transferred", "card_price",
+                  "payout_completed", "refunded"},
+        "cards": {"id", "user_id", "game_id", "numbers", "price_paid", "is_winner", "refunded", "refunded_at"},
+        "transactions": {"id", "user_id", "amount", "method", "reference", "status", "reviewed_by", "reviewed_at"},
+        "ledger_entries": {"id", "user_id", "entry_type", "amount", "balance_after", "reference_type", "reference_id"},
+        "audit_logs": {"id", "actor_id", "action", "target_type", "target_id"},
+    }
+    missing_columns = {}
+    for table, required_cols in required_columns.items():
+        actual_cols = {c["name"] for c in inspector.get_columns(table)}
+        missing = required_cols - actual_cols
+        if missing:
+            missing_columns[table] = sorted(missing)
+    if missing_columns:
+        return (False, f"Missing columns: {missing_columns}")
+    return (True, "All checks passed")
+
+@app.on_event("startup")
+def startup_event():
+    try:
+        inspector = inspect(engine)
+        existing_tables = set(inspector.get_table_names(schema="public"))
+
+        if "alembic_version" in existing_tables:
+            try:
+                from alembic.config import Config
+                from alembic import command
+                logger.info("🔄 Running alembic upgrade head...")
+                alembic_cfg = Config("alembic.ini")
+                command.upgrade(alembic_cfg, "head")
+                logger.info("✅ Alembic migration completed")
+            except Exception as mig_err:
+                logger.warning(f"⚠️ Alembic migration failed: {mig_err}")
+
+        inspector = inspect(engine)
+        existing_tables = set(inspector.get_table_names(schema="public"))
+        missing_tables = sorted(REQUIRED_TABLES - existing_tables)
+
+        if missing_tables:
+            logger.warning(f"⚠️ Missing tables: {missing_tables}")
+            Base.metadata.create_all(bind=engine)
+            logger.info("✅ create_all completed")
+
+        is_valid, message = validate_schema()
+        if is_valid:
+            logger.info("✅ Schema validation passed")
+        else:
+            logger.warning(f"⚠️ Schema invalid: {message}")
+            logger.warning("🔧 Dropping and recreating all tables to fix schema...")
+            Base.metadata.drop_all(bind=engine)
+            Base.metadata.create_all(bind=engine)
+            logger.info("✅ All tables recreated with correct schema")
+            is_valid_after, message_after = validate_schema()
+            if is_valid_after:
+                logger.info("✅ Schema validation passed after recreation")
+            else:
+                logger.error(f"❌ Schema still invalid: {message_after}")
+
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        logger.info("✅ Database connection verified")
+
+    except Exception:
+        logger.exception("❌ Startup failed.")
+        raise
+
+    if bot:
+        threading.Thread(target=run_bot, daemon=True).start()
+        logger.info("✅ Bot thread started")
+
+    threading.Thread(target=bingo_engine_loop, daemon=True).start()
+    logger.info("✅ Bingo engine started.")
+    logger.info("✅ Bingo backend started successfully.")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
