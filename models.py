@@ -1,6 +1,6 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ዳታቤዝ ሞዴሎች (models.py) - v8.2 FIXED
+✅ የBingo ጨዋታ ዳታቤዝ ሞዴሎች (models.py) - v9.2 FINAL
 =====================================================================
 ✅ User, Game, Card, Transaction, LedgerEntry, AuditLog
 ✅ AdminUser (ብዙ አስተዳዳሪዎች)
@@ -11,7 +11,7 @@
 ✅ Transaction - notes
 ✅ AuditLog - actor_username, actor_role, ip_address
 ✅ LedgerEntry - reference_type/id NOT NULL
-🔧 FIX: is_test_game column ተወግዷል (DB ውስጥ ስለሌለ)
+✅ Setting (የጨዋታ ቅንብሮች — Admin Panel ይቀይራል)
 =====================================================================
 """
 from sqlalchemy import (
@@ -73,7 +73,6 @@ class Game(Base):
     last_drawn_at = Column(DateTime(timezone=True), nullable=True)
     payout_completed = Column(Boolean, nullable=False, default=False)
     refunded = Column(Boolean, nullable=False, default=False)
-    # ✅ is_test_game ተወግዷል — በዳታቤዙ ውስጥ ስለሌለ
 
     cards = relationship("Card", back_populates="game", foreign_keys="Card.game_id")
 
@@ -241,3 +240,21 @@ class FraudFlag(Base):
 
     def __repr__(self):
         return f"<FraudFlag(id={self.id}, user_id={self.user_id}, type={self.flag_type})>"
+
+
+# =====================================================================
+# ✅ Setting (የጨዋታ ቅንብሮች — Admin Panel ይቀይራል)
+# =====================================================================
+class Setting(Base):
+    __tablename__ = "settings"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(String(500), nullable=False)
+    value_type = Column(String(20), nullable=False, default="string")
+    # value_type: "int", "decimal", "bool", "string"
+    description = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_by = Column(String(50), nullable=True)
+
+    def __repr__(self):
+        return f"<Setting(key={self.key}, value={self.value})>"
