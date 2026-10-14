@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ሃ ቡንላ ከድራ!</title>
+    <title> ኢትዮጵያዬ!</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -68,8 +68,52 @@
         .admin-item p { margin-bottom: 4px; }
         .approve-btn { background: #4caf50; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; margin-top: 6px; width: 100%; font-weight: bold; }
         .reject-btn { background: #d32f2f; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; margin-top: 6px; width: 100%; font-weight: bold; }
-        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #323232; color: white; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 2000; opacity: 0; transition: opacity 0.3s; max-width: 90%; }
-        .toast.show { opacity: 1; }
+        
+        /* ✅ የተሻሻለ እና ትልቅ የሆነ Toast Notification */
+        .toast { 
+            position: fixed; 
+            bottom: 30px; 
+            left: 50%; 
+            transform: translateX(-50%) translateY(100px); 
+            background: #1a1a1a; 
+            color: white; 
+            padding: 18px 24px; 
+            border-radius: 12px; 
+            font-size: 18px; /* ትልቅ ፊደል */
+            font-weight: bold; 
+            z-index: 99999; /* ከሁሉም ነገር በላይ */
+            opacity: 0; 
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55); 
+            max-width: 90%; 
+            text-align: center; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
+            white-space: pre-line; 
+            border-left: 6px solid #ff9800;
+        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        
+        /* ✅ አዲስ የሙሉ ስክሪን Loading Overlay */
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 10000; padding: 20px; text-align: center;
+        }
+        .loading-overlay.show { display: flex; }
+        .spinner-large {
+            width: 70px; height: 70px;
+            border: 8px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            border-top-color: #ff9800;
+            animation: spin 1s linear infinite;
+            margin-bottom: 25px;
+        }
+        .loading-text {
+            color: white; font-size: 22px; font-weight: bold;
+            line-height: 1.6; text-shadow: 1px 1px 5px rgba(0,0,0,0.8);
+            max-width: 85%;
+        }
+        
         .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .error-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f3e5f5; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; padding: 30px; text-align: center; }
@@ -115,6 +159,12 @@
     <div class="error-screen" id="errorScreen">
         <h2>⚠️ ስህተት</h2>
         <p>ይህ ገጽ በቴሌግራም ውስጥ ብቻ ይሰራል።<br>እባክህ/ሽ በቴሌግራም ቦት በኩል ክፈተው/ተው።</p>
+    </div>
+
+    <!-- ✅ አዲስ የሙሉ ስክሪን Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner-large"></div>
+        <div class="loading-text" id="loadingText">⏳ ሰርቨሩ በመነሳት ላይ ነው... እባክዎ ጥቂት ይጠብቁ</div>
     </div>
 
     <div class="app-container">
@@ -294,12 +344,23 @@
             return { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': tg.initData || '' };
         }
 
-        function showToast(msg, duration = 3000) {
+        // ✅ የተሻሻለ የToast ማሳያ (በትልቁ እና ጎልቶ የሚታይ)
+        function showToast(msg, duration = 4000) {
             const t = document.getElementById('toast');
             t.innerText = msg;
             t.classList.add('show');
             clearTimeout(toastTimer);
             toastTimer = setTimeout(() => t.classList.remove('show'), duration);
+        }
+
+        // ✅ አዲስ የLoading Overlay ማሳያ እና ማጥፊያ
+        function showLoadingOverlay(msg = "⏳ እባክዎ ጥቂት ይጠብቁ...") {
+            document.getElementById('loadingText').innerText = msg;
+            document.getElementById('loadingOverlay').classList.add('show');
+        }
+
+        function hideLoadingOverlay() {
+            document.getElementById('loadingOverlay').classList.remove('show');
         }
 
         // ✅ መሠረታዊ Retry
@@ -316,7 +377,7 @@
             }
         }
 
-        // ✅ የላቀ Retry — ሰርቨሩ ሲነቃ ለመጠበቅ
+        // ✅ የላቀ Retry — ሰርቨሩ ሲነቃ ለመጠበቅ (አሁን Loading Overlay ይጠቀማል)
         async function fetchWithServerWakeup(url, options = {}, maxAttempts = 6, delayMs = 5000) {
             let lastError = null;
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -331,12 +392,13 @@
                     if (res.status === 502 || res.status === 503 || res.status === 504) {
                         lastError = new Error(`Server waking up (${res.status})`);
                         if (attempt < maxAttempts) {
-                            showToast(`⏳ ሙከራ ${attempt}/${maxAttempts}... ሰርቨሩ በመነሳት ላይ`);
+                            showLoadingOverlay(`⏳ ሙከራ ${attempt}/${maxAttempts}...\nሰርቨሩ በመነሳት ላይ ነው።\nእባክዎ ጥቂት ይጠብቁ!`);
                             await new Promise(r => setTimeout(r, delayMs));
                             continue;
                         }
                         throw lastError;
                     }
+                    hideLoadingOverlay(); // ስኬታማ ሲሆን መሸፈኛውን አጥፋ
                     return res;
                 } catch (err) {
                     lastError = err;
@@ -344,12 +406,13 @@
                         lastError = new Error('Timeout');
                     }
                     if (attempt < maxAttempts) {
-                        showToast(`⏳ ሙከራ ${attempt}/${maxAttempts}... ይጠብቁ`);
+                        showLoadingOverlay(`⏳ ሙከራ ${attempt}/${maxAttempts}...\nእባክዎ ጥቂት ይጠብቁ!`);
                         await new Promise(r => setTimeout(r, delayMs));
                         continue;
                     }
                 }
             }
+            hideLoadingOverlay();
             throw lastError || new Error('Failed after retries');
         }
 
@@ -594,7 +657,7 @@
             const reference = prompt("የደረሰኙ ቁጥር:");
             if (!reference || reference.trim() === '') return;
             closeDepositModal();
-            showToast("⏳ በመላክ ላይ... ሰርቨሩ ቢነቃ ይጠብቁ", 6000);
+            showLoadingOverlay("⏳ ጥያቄዎን በመላክ ላይ...");
             try {
                 const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/deposit`, {
                     method: 'POST', headers: authHeaders(),
@@ -603,9 +666,11 @@
                 let data = {};
                 try { data = await res.json(); } catch (_) { data = {}; }
                 if (res.ok) showToast("✅ ጥያቄዎ ተልኳል! Admin ያጸድቀዋል።", 5000);
-                else showToast("❌ " + (data.detail || `ስህተት (${res.status})`), 4000);
+                else showToast("❌ " + (data.detail || `ስህተት (${res.status})`), 5000);
             } catch (e) {
                 showToast("❌ ሰርቨሩ ላይሰራ ነው — ለ1 ደቂቃ ጠብቀው እንደገና ይሞክሩ", 5000);
+            } finally {
+                hideLoadingOverlay();
             }
         }
 
@@ -618,7 +683,7 @@
             if (!account || account.length < 5) { showToast("❌ የአካውንት ቁጥር ያስፈልጋል"); return; }
             const currentBal = parseFloat(document.getElementById('user-balance').innerText) || 0;
             if (currentBal < amount) { showToast("❌ በቂ ባላንስ የለዎትም"); return; }
-            showToast("⏳ በመላክ ላይ...", 5000);
+            showLoadingOverlay("⏳ ጥያቄዎን በመላክ ላይ...");
             try {
                 const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/withdrawal`, {
                     method: 'POST', headers: authHeaders(),
@@ -631,10 +696,12 @@
                     closeWithdrawModal();
                     await fetchMe();
                 } else {
-                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`), 4000);
+                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`), 5000);
                 }
             } catch (e) {
                 showToast("❌ ሰርቨሩ ላይሰራ ነው — ለ1 ደቂቃ ጠብቀው እንደገና ይሞክሩ", 5000);
+            } finally {
+                hideLoadingOverlay();
             }
         }
 
@@ -644,7 +711,7 @@
             }
             if (!isGameTrusted()) { showToast("⏳ በመገናኘት ላይ"); return; }
             isBuying = true; updateBuyButton();
-            showToast("⏳ ካርድ በመግዛት ላይ...", 5000);
+            showLoadingOverlay("⏳ ካርድ በመግዛት ላይ...");
             try {
                 const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/buy_card`, {
                     method: 'POST', headers: authHeaders(),
@@ -658,12 +725,13 @@
                     await fetchMyCard();
                     await fetchGameState();
                 } else {
-                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`), 4000);
+                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`), 5000);
                 }
             } catch (e) {
                 showToast("❌ ሰርቨሩ ላይሰራ ነው", 5000);
             } finally {
                 isBuying = false; updateBuyButton();
+                hideLoadingOverlay();
             }
         }
 
@@ -801,7 +869,7 @@
 
         async function approveDeposit(id) {
             if (!confirm('ፍቀድ?')) return;
-            showToast("⏳ በማጽደቅ ላይ...");
+            showLoadingOverlay("⏳ በማጽደቅ ላይ...");
             try {
                 const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/approve/${id}`, 
                     {method:'POST', headers: authHeaders()}, 6, 5000);
@@ -814,17 +882,19 @@
                     await fetchMe();
                 } else showToast('❌ ' + (data.detail || 'ስህተት'));
             } catch (e) { showToast('❌ ሰርቨሩ ላይሰራ ነው'); }
+            finally { hideLoadingOverlay(); }
         }
 
         async function rejectDeposit(id) {
             if (!confirm('ከልክል?')) return;
-            showToast("⏳ በመከልከል ላይ...");
+            showLoadingOverlay("⏳ በመከልከል ላይ...");
             try {
                 const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/reject/${id}`, 
                     {method:'POST', headers: authHeaders()}, 6, 5000);
                 if (res.ok) { showToast('✅ ተከልክሏል'); loadDeposits(); updateAdminBadge(); }
                 else showToast('❌ ስህተት');
             } catch (e) { showToast('❌ ሰርቨሩ ላይሰራ ነው'); }
+            finally { hideLoadingOverlay(); }
         }
 
         async function loadWithdrawals() {
@@ -862,7 +932,7 @@
         async function approveWithdrawal(wid) {
             const ref = prompt('የክፍያ ማስረጃ ቁጥር:');
             if (!ref) return;
-            showToast("⏳ በማጽደቅ ላይ...");
+            showLoadingOverlay("⏳ በማጽደቅ ላይ...");
             try {
                 const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/withdrawal/${wid}/approve`, {
                     method: 'POST', headers: authHeaders(),
@@ -871,17 +941,19 @@
                 if (res.ok) { showToast('✅ ተፈቅዷል'); loadWithdrawals(); }
                 else showToast('❌ ስህተት');
             } catch (e) { showToast('❌ ሰርቨሩ ላይሰራ ነው'); }
+            finally { hideLoadingOverlay(); }
         }
 
         async function rejectWithdrawal(wid) {
             if (!confirm('ከልክል? ባላንስ ይመለሳል')) return;
-            showToast("⏳ በመከልከል ላይ...");
+            showLoadingOverlay("⏳ በመከልከል ላይ...");
             try {
                 const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/withdrawal/${wid}/reject`, 
                     {method:'POST', headers: authHeaders()}, 6, 5000);
                 if (res.ok) { showToast('✅ ተከልክሏል'); loadWithdrawals(); }
                 else showToast('❌ ስህተት');
             } catch (e) { showToast('❌ ሰርቨሩ ላይሰራ ነው'); }
+            finally { hideLoadingOverlay(); }
         }
 
         async function loadPlayers() {
@@ -1054,6 +1126,7 @@
         }
 
         window.onload = async function() {
+            showLoadingOverlay("⏳ እየተገናኘ ነው... እባክዎ ጥቂት ይጠብቁ");
             let result = await loadCurrentGame();
             let retries = 0;
             while (!result.ok && retries < 5) {
@@ -1061,7 +1134,8 @@
                 result = await loadCurrentGame();
                 retries++;
             }
-            if (!result.ok) showToast("⚠️ ሰርቨሩ ሊነቃ አልቻለም");
+            hideLoadingOverlay();
+            if (!result.ok) showToast("⚠️ ሰርቨሩ ሊነቃ አልቻለም። እባክዎ ቆይተው እንደገና ይሞክሩ።", 7000);
             await fetchMe();
             await fetchMyCard();
             await fetchGameState();
