@@ -12,8 +12,9 @@
         .top-header { background: linear-gradient(135deg, #6a1b9a, #ab47bc); color: white; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 2px 8px rgba(106,27,154,0.3); }
         .top-header h1 { font-size: 18px; margin-bottom: 5px; }
         .balance-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 8px; }
-        .btn-deposit { background: #4caf50; color: white; border: none; padding: 6px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 13px; }
-        .btn-deposit:active { transform: scale(0.96); }
+        .btn-deposit { background: #4caf50; color: white; border: none; padding: 6px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 13px; margin-left: 4px; }
+        .btn-withdraw { background: #ff9800; color: white; border: none; padding: 6px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 13px; margin-left: 4px; }
+        .btn-deposit:active, .btn-withdraw:active { transform: scale(0.96); }
         .stats-grid { display: flex; justify-content: space-between; background: #fff; padding: 10px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.08); }
         .stat-box { text-align: center; font-size: 11px; color: #666; flex: 1; border-right: 1px solid #f0f0f0; }
         .stat-box:last-child { border-right: none; }
@@ -32,14 +33,13 @@
         .cell.marked { background: #ff9800; color: white; }
         .cell.called { background: #4caf50; color: white; animation: pulse 0.4s; }
         .cell.free { cursor: default; }
-        .cell.winning { background: #d32f2f; color: white; }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
         .call-area { flex: 1; display: flex; flex-direction: column; gap: 10px; }
         .current-call-box { background: #6a1b9a; color: white; padding: 15px; border-radius: 15px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(106,27,154,0.3); }
         .current-call-box span { font-size: 13px; margin-bottom: 8px; opacity: 0.9; }
         .big-circle { background: #ff9800; width: 85px; height: 85px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: bold; box-shadow: 0 4px 12px rgba(255,152,0,0.5); }
         .recent-calls { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; min-height: 45px; }
-        .recent-calls .small-circle { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; color: white; background: #ff9800; box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
+        .recent-calls .small-circle { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; color: white; background: #ff9800; }
         .game-status { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 10px 15px; border-radius: 10px; font-size: 13px; font-weight: bold; }
         .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; }
         .status-waiting { background: #fff3e0; color: #e65100; }
@@ -48,48 +48,39 @@
         .status-error { background: #ffebee; color: #c62828; }
         .message-box { background: #f3e5f5; border: 2px solid #ce93d8; padding: 18px; border-radius: 10px; text-align: center; color: #6a1b9a; font-weight: bold; font-size: 13px; line-height: 1.5; }
         .bottom-nav { display: flex; gap: 8px; margin-top: 10px; position: fixed; bottom: 0; left: 0; right: 0; padding: 10px; background: linear-gradient(to top, #f3e5f5 80%, transparent); max-width: 800px; margin: 0 auto; }
-        .nav-btn { flex: 1; background: #7b1fa2; color: white; border: none; padding: 14px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 8px rgba(123,31,162,0.3); }
+        .nav-btn { flex: 1; background: #7b1fa2; color: white; border: none; padding: 14px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 14px; }
         .nav-btn:active { transform: scale(0.97); }
         .nav-btn:disabled { background: #bdbdbd; cursor: not-allowed; }
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; padding: 15px; }
         .modal-overlay.show { display: flex; }
-        .modal-box { background: white; width: 100%; max-width: 420px; padding: 20px; border-radius: 15px; text-align: center; max-height: 85vh; overflow-y: auto; }
+        .modal-box { background: white; width: 100%; max-width: 460px; padding: 20px; border-radius: 15px; text-align: center; max-height: 85vh; overflow-y: auto; }
         .modal-box h2 { color: #6a1b9a; margin-bottom: 15px; font-size: 17px; }
         .modal-box p { font-size: 13px; color: #666; margin-bottom: 10px; line-height: 1.5; }
         .payment-options { display: flex; flex-direction: column; gap: 10px; margin: 15px 0; }
         .pay-btn { padding: 14px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; color: white; font-size: 15px; }
-        .pay-btn:active { transform: scale(0.98); }
-        .pay-telebirr { background: #4caf50; }
-        .pay-cbe { background: #800080; }
         .account-number { font-size: 22px; font-weight: bold; color: #d32f2f; margin: 10px 0; letter-spacing: 1.5px; padding: 10px; background: #ffebee; border-radius: 8px; }
         .close-btn { background: #e0e0e0; color: #333; border: none; padding: 12px 24px; border-radius: 8px; margin-top: 10px; cursor: pointer; font-weight: bold; }
-        .close-btn:active { transform: scale(0.97); }
-        .admin-panel-btn { position: fixed; bottom: 90px; right: 15px; background: #d32f2f; color: white; border: none; padding: 14px; border-radius: 50%; font-size: 22px; box-shadow: 0 4px 12px rgba(211,47,47,0.4); cursor: pointer; display: none; z-index: 999; }
-        .badge { position: absolute; top: -5px; right: -5px; background-color: #d32f2f; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; font-weight: bold; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .admin-panel-btn { position: fixed; bottom: 90px; right: 15px; background: #d32f2f; color: white; border: none; padding: 14px; border-radius: 50%; font-size: 22px; cursor: pointer; display: none; z-index: 999; }
+        .badge { position: absolute; top: -5px; right: -5px; background-color: #d32f2f; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; font-weight: bold; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; }
         .hidden { display: none !important; }
         .admin-item { border: 1px solid #e0e0e0; padding: 12px; margin-bottom: 12px; border-radius: 10px; text-align: left; font-size: 13px; background: #fafafa; }
         .admin-item b { color: #6a1b9a; }
-        .admin-item p { margin-bottom: 4px; font-size: 13px; }
+        .admin-item p { margin-bottom: 4px; }
         .approve-btn { background: #4caf50; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; margin-top: 6px; width: 100%; font-weight: bold; }
         .reject-btn { background: #d32f2f; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; margin-top: 6px; width: 100%; font-weight: bold; }
-        .approve-btn:disabled, .reject-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #323232; color: white; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 2000; opacity: 0; transition: opacity 0.3s; max-width: 90%; }
         .toast.show { opacity: 1; }
         .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .error-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f3e5f5; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; padding: 30px; text-align: center; }
         .error-screen.show { display: flex; }
-        .error-screen h2 { color: #d32f2f; margin-bottom: 15px; }
-        .error-screen p { color: #666; margin-bottom: 20px; line-height: 1.5; }
         .lb-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f0f0f0; text-align: left; }
-        .lb-item:last-child { border-bottom: none; }
         .lb-rank { font-size: 18px; font-weight: bold; width: 40px; color: #6a1b9a; text-align: center; }
         .lb-user { flex: 1; padding-left: 10px; }
         .lb-name { font-weight: bold; font-size: 14px; }
         .lb-wins { font-size: 11px; color: #999; }
         .lb-amount { font-weight: bold; color: #4caf50; font-size: 15px; }
         .hist-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; border-bottom: 1px solid #f0f0f0; text-align: left; }
-        .hist-item:last-child { border-bottom: none; }
         .hist-icon { font-size: 22px; width: 35px; text-align: center; }
         .hist-info { flex: 1; padding: 0 10px; }
         .hist-type { font-weight: bold; font-size: 13px; color: #333; }
@@ -97,6 +88,27 @@
         .hist-amount { font-weight: bold; font-size: 15px; }
         .hist-amount.pos { color: #4caf50; }
         .hist-amount.neg { color: #d32f2f; }
+        @keyframes giftBounce { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-15px) rotate(5deg); } }
+        .user-card { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 10px; padding: 12px; margin-bottom: 10px; text-align: left; font-size: 13px; }
+        .user-card .user-name { font-weight: bold; color: #6a1b9a; font-size: 15px; margin-bottom: 5px; }
+        .user-card .user-stat { color: #666; margin: 3px 0; }
+        .user-card .user-stat b { color: #333; }
+        .user-card .user-actions { display: flex; gap: 6px; margin-top: 8px; }
+        .user-card .user-actions button { flex: 1; padding: 8px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .btn-ban { background: #d32f2f; color: white; }
+        .btn-unban { background: #4caf50; color: white; }
+        .btn-detail { background: #1976d2; color: white; }
+        .banned-tag { background: #d32f2f; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 5px; }
+        .tabs { display: flex; gap: 4px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px; }
+        .tab-btn { background: #e0e0e0; color: #666; border: none; padding: 8px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 12px; white-space: nowrap; }
+        .tab-btn.active { background: #6a1b9a; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .stat-card { background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #e0e0e0; text-align: center; }
+        .stat-card .num { font-size: 22px; font-weight: bold; color: #6a1b9a; }
+        .stat-card .lbl { font-size: 11px; color: #666; margin-top: 4px; }
+        .stats-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
+        .input-field { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 8px; }
     </style>
 </head>
 <body>
@@ -110,7 +122,10 @@
             <h1>🎰 ሃ ቡንላ ከድራ!</h1>
             <div class="balance-bar">
                 <span>💰 ባላንስ: <b id="user-balance">0 ብር</b></span>
-                <button class="btn-deposit" onclick="openDepositModal()">+ ጨምር</button>
+                <div>
+                    <button class="btn-deposit" onclick="openDepositModal()">+ ጨምር</button>
+                    <button class="btn-withdraw" onclick="openWithdrawModal()">- አውጣ</button>
+                </div>
             </div>
         </div>
         <div class="stats-grid">
@@ -150,43 +165,89 @@
         </div>
     </div>
 
+    <!-- Deposit Modal -->
     <div class="modal-overlay" id="depositModal">
         <div class="modal-box">
             <h2>💳 ባላንስ ለመሙላት</h2>
             <p>እባክህ/ሽ ከታች ያለውን የአካውንት ቁጥር በመጠቀም ገንዘብ ያስተላልፉ።</p>
             <div class="account-number">0912649315</div>
             <div class="payment-options">
-                <button class="pay-btn pay-telebirr" onclick="selectPayment('ቴሌብር')">📱 ቴሌብር (Telebirr)</button>
-                <button class="pay-btn pay-cbe" onclick="selectPayment('ሲቢኢ ብር')">🏦 ሲቢኢ ብር (CBE Birr)</button>
+                <button class="pay-btn pay-telebirr" onclick="selectPayment('ቴሌብር')">📱 ቴሌብር</button>
+                <button class="pay-btn pay-cbe" onclick="selectPayment('ሲቢኢ ብር')">🏦 ሲቢኢ ብር</button>
             </div>
-            <p style="font-size: 11px; color: #999;">ከተላለፉ በኋላ የደረሰኙን ወይም የትራንዛክሽን ቁጥር ያስገቡ።</p>
             <button class="close-btn" onclick="closeDepositModal()">ዝጋ</button>
         </div>
     </div>
 
-    <div class="modal-overlay" id="adminModal">
+    <!-- Withdraw Modal -->
+    <div class="modal-overlay" id="withdrawModal">
         <div class="modal-box">
+            <h2>💸 ገንዘብ ማውጣት</h2>
+            <p style="font-size:12px;">ዝቅተኛ: 50 ብር | ከፍተኛ: 50,000 ብር</p>
+            <input type="number" id="withdrawAmount" class="input-field" placeholder="መጠን (በብር)">
+            <select id="withdrawMethod" class="input-field">
+                <option value="ቴሌብር">ቴሌብር</option>
+                <option value="ሲቢኢ ብር">ሲቢኢ ብር</option>
+            </select>
+            <input type="text" id="withdrawAccount" class="input-field" placeholder="የአካውንት ቁጥር">
+            <input type="text" id="withdrawName" class="input-field" placeholder="የአካውንት ባለቤት ስም (አማራጭ)">
+            <button class="approve-btn" onclick="submitWithdrawal()">📤 ጥያቄ ላክ</button>
+            <button class="close-btn" onclick="closeWithdrawModal()">ዝጋ</button>
+        </div>
+    </div>
+
+    <!-- Admin Modal -->
+    <div class="modal-overlay" id="adminModal">
+        <div class="modal-box" style="max-width: 95vw;">
             <h2>⚙️ የአስተዳዳሪ ፓነል</h2>
-            <div id="admin-content"><p>በመጫን ላይ...</p></div>
+            <div id="admin-role-info" style="font-size:12px; color:#666; margin-bottom:10px;"></div>
+            <div class="tabs" id="adminTabs">
+                <button class="tab-btn active" onclick="switchTab('dashboard')">📊 ዳሽቦርድ</button>
+                <button class="tab-btn" onclick="switchTab('deposits')">💰 ክፍያዎች</button>
+                <button class="tab-btn" onclick="switchTab('withdrawals')">💸 ማውጣት</button>
+                <button class="tab-btn" onclick="switchTab('players')">👥 ተጫዋቾች</button>
+                <button class="tab-btn" onclick="switchTab('admins')" id="adminsTabBtn">🛡️ አስተዳዳሪዎች</button>
+                <button class="tab-btn" onclick="switchTab('audit')">📜 ታሪክ</button>
+            </div>
+            <div id="tab-dashboard" class="tab-content active"></div>
+            <div id="tab-deposits" class="tab-content"></div>
+            <div id="tab-withdrawals" class="tab-content"></div>
+            <div id="tab-players" class="tab-content"></div>
+            <div id="tab-admins" class="tab-content"></div>
+            <div id="tab-audit" class="tab-content"></div>
             <button class="close-btn" onclick="closeAdminModal()">ዝጋ</button>
         </div>
     </div>
 
+    <!-- Leaderboard Modal -->
     <div class="modal-overlay" id="leaderboardModal">
         <div class="modal-box">
             <h2>🏆 ሰንጠረዥ</h2>
-            <p style="font-size: 12px; color: #999; margin-bottom: 10px;">ከፍተኛ ሽልማት ያገኙ ተጫዋቾች</p>
             <div id="leaderboard-content"><p>በመጫን ላይ...</p></div>
             <button class="close-btn" onclick="closeLeaderboard()">ዝጋ</button>
         </div>
     </div>
 
+    <!-- History Modal -->
     <div class="modal-overlay" id="historyModal">
         <div class="modal-box">
             <h2>📜 የእኔ ታሪክ</h2>
-            <p style="font-size: 12px; color: #999; margin-bottom: 10px;">የመጨረሻዎቹ 50 ግብይቶች</p>
             <div id="history-content"><p>በመጫን ላይ...</p></div>
             <button class="close-btn" onclick="closeHistory()">ዝጋ</button>
+        </div>
+    </div>
+
+    <!-- Win Modal -->
+    <div class="modal-overlay" id="winModal">
+        <div class="modal-box" style="background: linear-gradient(135deg, #fff9c4, #ffe082); border: 4px solid #ffc107;">
+            <div style="font-size: 80px; margin: 10px 0; animation: giftBounce 1s infinite;">🎁</div>
+            <h2 style="color: #e65100; font-size: 26px;">🎉 እንኳን ደስ አለዎት! 🎉</h2>
+            <p style="font-size: 16px; color: #6a1b9a; font-weight: bold; margin: 15px 0;">አሸንፈዋል!</p>
+            <div style="background: white; padding: 15px; border-radius: 12px; margin: 15px 0; border: 2px dashed #ff9800;">
+                <div style="font-size: 13px; color: #666; margin-bottom: 5px;">ያሸነፉት ገንዘብ</div>
+                <div id="win-amount" style="font-size: 32px; font-weight: bold; color: #4caf50;">0 ብር</div>
+            </div>
+            <button class="close-btn" onclick="closeWinModal()" style="background: #ff9800; color: white; padding: 14px 40px; font-size: 16px;">እሺ 👌</button>
         </div>
     </div>
 
@@ -221,25 +282,14 @@
         let myCardNumbers = [];
         let lastCalledNumber = null;
         let isAdmin = false;
+        let isSuperAdmin = false;
+        let adminInfo = null;
         let isBuying = false;
-        let isPolling = true;
         let toastTimer = null;
         let lastSuccessfulGameStateFetch = 0;
-        let loadGameRequestId = 0;
         let cardError = false;
-
-        let gameStateApplyToken = 0;
-        let gameStatePromise = null;
-        let gameStatePromiseGameId = null;
-        let gameStateForceQueued = false;
-        let myCardPromise = null;
-        let myCardPromiseGameId = null;
-
-        let loadGamePromise = null;
-        let mePromise = null;
-        let adminBadgePromise = null;
-        let depositInFlight = false;
-        let adminActionInFlight = false;
+        let currentTab = 'dashboard';
+        let adminData = { deposits: [], withdrawals: [], players: [], admins: [], audit: [] };
 
         function authHeaders() {
             return { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': tg.initData || '' };
@@ -259,7 +309,6 @@
                     return res;
                 } catch (err) {
                     if (i === retries - 1) throw err;
-                    console.warn(`Fetch failed, retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
                     await new Promise(r => setTimeout(r, delay));
                 }
             }
@@ -271,14 +320,11 @@
             else if (status === 'playing') { badge.classList.add('status-playing'); badge.innerText = 'በሂደት'; }
             else if (status === 'finished') { badge.classList.add('status-finished'); badge.innerText = 'ተጠናቋል'; }
             else if (status === 'cancelled') { badge.classList.add('status-finished'); badge.innerText = 'ተሰርዟል'; }
-            else if (status === 'error') { badge.classList.add('status-error'); badge.innerText = 'ስህተት'; }
-            else { badge.classList.add('status-waiting'); badge.innerText = 'በመጠበቅ'; }
+            else { badge.classList.add('status-error'); badge.innerText = 'ስህተት'; }
         }
         function isGameTrusted() {
-            if (currentGameId === null) return false;
-            if (currentGameStatus === null) return false;
-            if ((Date.now() - lastSuccessfulGameStateFetch) > GAME_STATE_STALE_MS) return false;
-            return true;
+            if (currentGameId === null || currentGameStatus === null) return false;
+            return (Date.now() - lastSuccessfulGameStateFetch) <= GAME_STATE_STALE_MS;
         }
         function updateBuyButton() {
             const btn = document.getElementById('buy-card-btn');
@@ -293,218 +339,142 @@
             else if (!waiting) { btn.disabled = true; btn.innerText = "🎫 ጨዋታ ተጀምሯል"; }
             else { btn.disabled = false; btn.innerText = "🎫 ካርድ ግዛ"; }
         }
-        function clearGameUI() {
-            currentGameId = null;
-            currentGameStatus = null;
-            myCardNumbers = [];
-            lastCalledNumber = null;
-            lastSuccessfulGameStateFetch = 0;
-            cardError = false;
-            document.getElementById('bingo-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px 10px; color: #999; font-size: 13px;">⏳ አዲስ ጨዋታ በመጠበቅ ላይ...</div>`;
-            document.getElementById('recent-calls').innerHTML = '';
-            document.getElementById('current-call').innerText = '-';
-            document.getElementById('players-count').innerText = '0';
-            document.getElementById('derash-amount').innerText = '0';
-            document.getElementById('call-count').innerText = '0';
-            document.getElementById('bet-amount').innerText = '10';
-            document.getElementById('status-message').innerText = '⏳ አዲስ ጨዋታ በመጠበቅ ላይ...';
-            setStatusBadge('waiting');
-            updateBuyButton();
-        }
 
         async function loadCurrentGame() {
-            if (loadGamePromise) return loadGamePromise;
-            const promise = (async () => {
-                const reqId = ++loadGameRequestId;
-                try {
-                    const res = await fetchWithRetry(`${API_BASE_URL}/api/game/current/state`);
-                    const data = await res.json();
-                    if (reqId !== loadGameRequestId) return { ok: true, hasGame: false, stale: true };
-                    if (data.id) {
-                        if (currentGameId !== data.id) {
-                            currentGameId = data.id;
-                            currentGameStatus = null;
-                            myCardNumbers = [];
-                            lastCalledNumber = null;
-                            lastSuccessfulGameStateFetch = 0;
-                            cardError = false;
-                            myCardPromise = null;
-                            myCardPromiseGameId = null;
-                            gameStatePromise = null;
-                            gameStatePromiseGameId = null;
-                            gameStateForceQueued = false;
-                            document.getElementById('players-count').innerText = '0';
-                            document.getElementById('derash-amount').innerText = '0';
-                            document.getElementById('call-count').innerText = '0';
-                            document.getElementById('bet-amount').innerText = data.card_price || 10;
-                            document.getElementById('status-message').innerText = '⏳ የጨዋታ መረጃ በመጫን ላይ...';
-                            setStatusBadge('waiting');
-                            document.getElementById('bingo-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px 10px; color: #999; font-size: 13px;">🎫 ካርድ ለመግዛት ከታች "ካርድ ግዛ" ን ተጭነው/ቺው</div>`;
-                            document.getElementById('recent-calls').innerHTML = '';
-                            document.getElementById('current-call').innerText = '-';
-                            updateBuyButton();
-                        }
-                        cardPrice = data.card_price || 10;
-                        return { ok: true, hasGame: true };
-                    } else {
-                        if (currentGameId !== null) clearGameUI();
-                        else updateBuyButton();
-                        return { ok: true, hasGame: false };
+            try {
+                const res = await fetchWithRetry(`${API_BASE_URL}/api/game/current/state`);
+                const data = await res.json();
+                if (data.id) {
+                    if (currentGameId !== data.id) {
+                        currentGameId = data.id;
+                        currentGameStatus = null;
+                        myCardNumbers = [];
+                        lastSuccessfulGameStateFetch = 0;
+                        cardError = false;
                     }
-                } catch (e) {
-                    console.error("loadCurrentGame:", e);
-                    lastSuccessfulGameStateFetch = 0;
-                    document.getElementById('status-message').innerText = '⏳ ሰርቨሩ በመነሳት ላይ ነው... እባክዎ ይጠብቁ (ለ1 ደቂቃ ያህል)';
-                    setStatusBadge('waiting');
-                    return { ok: false };
+                    return { ok: true, hasGame: true };
                 }
-            })();
-            loadGamePromise = promise;
-            try { return await promise; }
-            finally { if (loadGamePromise === promise) loadGamePromise = null; }
+                return { ok: true, hasGame: false };
+            } catch (e) {
+                document.getElementById('status-message').innerText = '⏳ ሰርቨሩ በመነሳት ላይ ነው...';
+                setStatusBadge('waiting');
+                return { ok: false };
+            }
         }
 
         async function fetchMe() {
-            if (mePromise) return mePromise;
-            const promise = (async () => {
-                try {
-                    const res = await fetch(`${API_BASE_URL}/api/me`, { headers: authHeaders() });
-                    if (!res.ok) {
-                        if (res.status === 401 || res.status === 403) {
-                            document.getElementById('errorScreen').classList.add('show');
-                        }
-                        return;
-                    }
-                    const data = await res.json();
-                    document.getElementById('user-balance').innerText = data.balance + " ብር";
-                    isAdmin = data.is_admin === true;
-                    document.getElementById('adminPanelBtn').style.display = isAdmin ? 'block' : 'none';
-                    if (isAdmin) updateAdminBadge();
-                    else document.getElementById('admin-badge').classList.add('hidden');
-                } catch (e) { console.error("fetchMe:", e); }
-            })();
-            mePromise = promise;
-            try { return await promise; }
-            finally { if (mePromise === promise) mePromise = null; }
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/me`, { headers: authHeaders() });
+                if (!res.ok) return;
+                const data = await res.json();
+                document.getElementById('user-balance').innerText = data.balance.toFixed(2) + " ብር";
+                isAdmin = data.is_admin === true;
+                isSuperAdmin = data.is_super_admin === true;
+                document.getElementById('adminPanelBtn').style.display = isAdmin ? 'block' : 'none';
+                if (isAdmin) {
+                    await fetchAdminInfo();
+                    await updateAdminBadge();
+                }
+            } catch (e) { console.error("fetchMe:", e); }
+        }
+
+        async function fetchAdminInfo() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/me`, { headers: authHeaders() });
+                if (!res.ok) return;
+                adminInfo = await res.json();
+                document.getElementById('admin-role-info').innerHTML =
+                    `ሚና: <b>${adminInfo.role}</b> | ስም: ${adminInfo.display_name}`;
+                document.getElementById('adminsTabBtn').style.display = adminInfo.is_super ? 'block' : 'none';
+            } catch (e) { console.error("fetchAdminInfo:", e); }
         }
 
         async function updateAdminBadge() {
             if (!isAdmin) return;
-            if (adminBadgePromise) return adminBadgePromise;
-            const promise = (async () => {
-                try {
-                    const res = await fetch(`${API_BASE_URL}/api/admin/pending`, { headers: authHeaders() });
-                    if (!res.ok) return;
-                    const data = await res.json();
-                    const badge = document.getElementById('admin-badge');
-                    const count = Array.isArray(data?.pending) ? data.pending.length : 0;
-                    if (count > 0) { badge.innerText = count; badge.classList.remove('hidden'); }
-                    else badge.classList.add('hidden');
-                } catch (e) { document.getElementById('admin-badge').classList.add('hidden'); }
-            })();
-            adminBadgePromise = promise;
-            try { return await promise; }
-            finally { if (adminBadgePromise === promise) adminBadgePromise = null; }
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/pending`, { headers: authHeaders() });
+                if (!res.ok) return;
+                const data = await res.json();
+                const count = (data?.pending?.length || 0);
+                const badge = document.getElementById('admin-badge');
+                if (count > 0) { badge.innerText = count; badge.classList.remove('hidden'); }
+                else badge.classList.add('hidden');
+            } catch (e) {}
         }
 
         async function fetchMyCard() {
             if (!currentGameId) return;
-            const requestedGameId = currentGameId;
-            if (myCardPromise && myCardPromiseGameId === requestedGameId) return myCardPromise;
-            const promise = (async () => {
-                try {
-                    const res = await fetch(`${API_BASE_URL}/api/my_card/${requestedGameId}`, { headers: authHeaders() });
-                    if (!res.ok) return;
-                    const data = await res.json();
-                    if (requestedGameId !== currentGameId) return;
-                    if (data.has_card) {
-                        renderBingoCard(data.numbers);
-                    } else {
-                        myCardNumbers = [];
-                        cardError = false;
-                        document.getElementById('bingo-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px 10px; color: #999; font-size: 13px;" id="card-placeholder">🎫 ካርድ ለመግዛት ከታች "ካርድ ግዛ" ን ተጭነው/ቺው</div>`;
-                    }
-                    updateBuyButton();
-                } catch (e) { console.error("fetchMyCard:", e); }
-            })();
-            myCardPromise = promise;
-            myCardPromiseGameId = requestedGameId;
-            try { return await promise; }
-            finally { if (myCardPromise === promise) { myCardPromise = null; myCardPromiseGameId = null; } }
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/my_card/${currentGameId}`, { headers: authHeaders() });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.has_card) {
+                    renderBingoCard(data.numbers);
+                } else {
+                    myCardNumbers = [];
+                    document.getElementById('bingo-grid').innerHTML =
+                        `<div style="grid-column: 1/-1; text-align: center; padding: 40px 10px; color: #999; font-size: 13px;">🎫 ካርድ ለመግዛት ከታች "ካርድ ግዛ" ን ተጭነው/ቺው</div>`;
+                }
+                updateBuyButton();
+            } catch (e) {}
         }
 
-        async function fetchGameState(force = false) {
+        let prevStatusForWin = null;
+        let prevBalanceForWin = 0;
+
+        async function fetchGameState() {
             if (!currentGameId) return;
-            const requestedGameId = currentGameId;
-            if (gameStatePromise && gameStatePromiseGameId === requestedGameId) {
-                if (!force) return gameStatePromise;
-                if (gameStateForceQueued) return gameStatePromise;
-                gameStateForceQueued = true;
-                try { await gameStatePromise; } catch (_) {}
-                gameStateForceQueued = false;
-                if (requestedGameId !== currentGameId) return;
-            }
-            const myToken = ++gameStateApplyToken;
-            const promise = (async () => {
-                try {
-                    const res = await fetchWithRetry(`${API_BASE_URL}/api/game/${requestedGameId}`);
-                    const data = await res.json();
-                    if (requestedGameId !== currentGameId) return;
-                    if (myToken !== gameStateApplyToken) return;
-                    if (data.error) return;
-                    if (!['waiting', 'playing', 'finished', 'cancelled'].includes(data.status)) return;
-                    lastSuccessfulGameStateFetch = Date.now();
-                    currentGameStatus = data.status;
-                    document.getElementById('players-count').innerText = data.players_count || 0;
-                    document.getElementById('derash-amount').innerText = data.jackpot || 0;
-                    document.getElementById('call-count').innerText = data.call_count || 0;
-                    cardPrice = data.card_price || 10;
-                    document.getElementById('bet-amount').innerText = cardPrice;
-                    setStatusBadge(data.status);
-                    updateBuyButton();
-                    const el = document.getElementById('current-call');
-                    const calledArr = (typeof data.called_numbers === 'string' ? data.called_numbers : '')
-                        .split(',').map(s => s.trim()).filter(s => s !== '')
-                        .map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 75);
-                    let backendLast = null;
-                    if (data.last_number != null) {
-                        const n = Number(data.last_number);
-                        if (Number.isInteger(n) && n >= 1 && n <= 75) backendLast = n;
+            try {
+                const res = await fetchWithRetry(`${API_BASE_URL}/api/game/${currentGameId}`);
+                const data = await res.json();
+                if (data.error) return;
+                if (!['waiting', 'playing', 'finished', 'cancelled'].includes(data.status)) return;
+
+                const prevStatus = currentGameStatus;
+                lastSuccessfulGameStateFetch = Date.now();
+                currentGameStatus = data.status;
+                document.getElementById('players-count').innerText = data.players_count || 0;
+                document.getElementById('derash-amount').innerText = data.jackpot || 0;
+                document.getElementById('call-count').innerText = data.call_count || 0;
+                cardPrice = data.card_price || 10;
+                document.getElementById('bet-amount').innerText = cardPrice;
+                setStatusBadge(data.status);
+                updateBuyButton();
+
+                const calledArr = (typeof data.called_numbers === 'string' ? data.called_numbers : '')
+                    .split(',').map(s => s.trim()).filter(s => s !== '').map(Number)
+                    .filter(n => Number.isInteger(n) && n >= 1 && n <= 75);
+
+                const el = document.getElementById('current-call');
+                if (calledArr.length === 0) {
+                    el.innerText = '-';
+                } else {
+                    const lastN = data.last_number || calledArr[calledArr.length - 1];
+                    if (String(lastN) !== String(lastCalledNumber)) {
+                        lastCalledNumber = lastN;
+                        el.innerText = lastN;
+                        el.style.animation = 'none';
+                        setTimeout(() => el.style.animation = 'pulse 0.4s', 10);
                     }
-                    if (calledArr.length === 0) {
-                        lastCalledNumber = null;
-                        el.innerText = '-';
-                    } else if (backendLast !== null) {
-                        if (String(backendLast) !== String(lastCalledNumber)) {
-                            lastCalledNumber = backendLast;
-                            el.innerText = backendLast;
-                            el.style.animation = 'none';
-                            setTimeout(() => el.style.animation = 'pulse 0.4s', 10);
-                        }
-                    } else {
-                        const fallback = calledArr[calledArr.length - 1];
-                        if (String(fallback) !== String(lastCalledNumber)) {
-                            lastCalledNumber = fallback;
-                            el.innerText = fallback;
-                        }
-                    }
-                    if (data.called_numbers !== undefined) updateCalledNumbers(calledArr);
-                    const msg = document.getElementById('status-message');
-                    if (data.status === "waiting") {
-                        msg.innerHTML = "🎫 ካርድ ገዝተው ጨዋታውን ይጀምሩ!<br><small>2 ካርድ ሲኖር ጨዋታው ይጀመራል</small>";
-                    } else if (data.status === "playing") {
-                        msg.innerHTML = "🎯 ጨዋታው በሂደት ላይ ነው!<br><small>ቁጥሮች በየ 5 ሰከንዱ ይጠራሉ</small>";
-                    } else if (data.status === "finished") {
-                        msg.innerHTML = "🏁 ጨዋታው ተጠናቋል!<br><small>ለቀጣዩ ጨዋታ ይጠብቁ</small>";
-                    } else if (data.status === "cancelled") {
-                        msg.innerHTML = "⚠️ ጨዋታው ተሰርዟል!<br><small>ገንዘብዎ ተመልሷል</small>";
-                    }
-                } catch (e) { console.error("fetchGameState:", e); }
-            })();
-            gameStatePromise = promise;
-            gameStatePromiseGameId = requestedGameId;
-            try { return await promise; }
-            finally { if (gameStatePromise === promise) { gameStatePromise = null; gameStatePromiseGameId = null; } }
+                }
+                updateCalledNumbers(calledArr);
+
+                const msg = document.getElementById('status-message');
+                if (data.status === "waiting") msg.innerHTML = "🎫 ካርድ ገዝተው ጨዋታውን ይጀምሩ!<br><small>2 ካርድ ሲኖር ጨዋታው ይጀመራል</small>";
+                else if (data.status === "playing") msg.innerHTML = "🎯 ጨዋታው በሂደት ላይ ነው!<br><small>ቁጥሮች በየ 5 ሰከንዱ ይጠራሉ</small>";
+                else if (data.status === "finished") msg.innerHTML = "🏁 ጨዋታው ተጠናቋል!<br><small>ለቀጣዩ ጨዋታ ይጠብቁ</small>";
+                else if (data.status === "cancelled") msg.innerHTML = "⚠️ ጨዋታው ተሰርዟል!<br><small>ገንዘብዎ ተመልሷል</small>";
+
+                // Winner detection
+                if (prevStatus === 'playing' && data.status === 'finished') {
+                    setTimeout(async () => {
+                        const oldBal = parseFloat(document.getElementById('user-balance').innerText) || 0;
+                        await fetchMe();
+                        const newBal = parseFloat(document.getElementById('user-balance').innerText) || 0;
+                        if (newBal > oldBal) showWinModal(newBal - oldBal);
+                    }, 1500);
+                }
+            } catch (e) {}
         }
 
         function updateCalledNumbers(called) {
@@ -512,12 +482,9 @@
             if (called.length === 0) {
                 rc.innerHTML = '';
                 document.querySelectorAll('#bingo-grid .cell').forEach((cell, i) => {
-                    cell.classList.remove('called');
-                    if (i === 12 && cell.innerText === 'FREE') cell.classList.add('marked', 'free');
-                    else cell.classList.remove('marked');
+                    cell.classList.remove('called', 'marked');
+                    if (i === 12) cell.classList.add('marked', 'free');
                 });
-                document.getElementById('current-call').innerText = '-';
-                lastCalledNumber = null;
                 return;
             }
             const recent = called.slice(-5).reverse();
@@ -531,7 +498,7 @@
             if (myCardNumbers.length > 0) {
                 const calledSet = new Set(called);
                 document.querySelectorAll('#bingo-grid .cell').forEach((cell, i) => {
-                    if (i === 12) { cell.classList.add('marked', 'free'); return; }
+                    if (i === 12) return;
                     const num = Number(cell.innerText);
                     if (!Number.isInteger(num)) return;
                     const isCalled = calledSet.has(num);
@@ -548,31 +515,12 @@
             const nums = raw.map(Number);
             if (nums.some(n => !Number.isInteger(n))) return null;
             if (nums[12] !== 0) return null;
-            const ranges = [[1, 15], [16, 30], [31, 45], [46, 60], [61, 75]];
-            for (let row = 0; row < 5; row++) {
-                for (let col = 0; col < 5; col++) {
-                    const i = row * 5 + col;
-                    if (i === 12) continue;
-                    const n = nums[i];
-                    const [min, max] = ranges[col];
-                    if (n < min || n > max) return null;
-                }
-            }
-            const nonFree = nums.filter((_, i) => i !== 12);
-            if (new Set(nonFree).size !== 24) return null;
             return nums;
         }
 
         function renderBingoCard(numbersStr) {
             const nums = validateCardNumbers(numbersStr);
-            if (!nums) {
-                console.error("Invalid card data");
-                cardError = true;
-                myCardNumbers = [];
-                document.getElementById('bingo-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px 10px; color: #d32f2f; font-size: 13px;" id="card-placeholder">⚠️ የካርድ መረጃ ስህተት። ግዢ ተሰናክሏል።</div>`;
-                updateBuyButton();
-                return;
-            }
+            if (!nums) { cardError = true; return; }
             cardError = false;
             const grid = document.getElementById('bingo-grid');
             grid.innerHTML = '';
@@ -580,90 +528,93 @@
             for (let i = 0; i < 25; i++) {
                 const cell = document.createElement('div');
                 cell.className = 'cell';
-                if (i === 12) {
-                    cell.innerText = 'FREE';
-                    cell.classList.add('marked', 'free');
-                } else {
-                    cell.innerText = nums[i] || '';
-                }
+                if (i === 12) { cell.innerText = 'FREE'; cell.classList.add('marked', 'free'); }
+                else cell.innerText = nums[i] || '';
                 grid.appendChild(cell);
             }
         }
 
+        // MODALS
         function openDepositModal() { document.getElementById('depositModal').classList.add('show'); }
         function closeDepositModal() { document.getElementById('depositModal').classList.remove('show'); }
+        function openWithdrawModal() { document.getElementById('withdrawModal').classList.add('show'); }
+        function closeWithdrawModal() { document.getElementById('withdrawModal').classList.remove('show'); }
+        function closeWinModal() { document.getElementById('winModal').classList.remove('show'); }
+
+        function showWinModal(amount) {
+            document.getElementById('win-amount').innerText = amount.toFixed(2) + ' ብር';
+            document.getElementById('winModal').classList.add('show');
+            try { if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success'); } catch(e) {}
+        }
 
         async function selectPayment(method) {
-            if (depositInFlight) { showToast("⏳ ቀድሞ የተላከ ጥያቄ በመካሄድ ላይ ነው"); return; }
-            const amountStr = prompt("ያስተላለፍከው/ሽውን ገንዘብ መጠን አስገባ (በብር):");
+            const amountStr = prompt("ያስተላለፉት ገንዘብ መጠን (በብር):");
             if (!amountStr) return;
             const amount = Number(amountStr);
             if (!/^\d+$/.test(amountStr.trim()) || amount < MIN_DEPOSIT || amount > MAX_DEPOSIT) {
-                showToast(`❌ መጠኑ ከ${MIN_DEPOSIT} ብር እስከ ${MAX_DEPOSIT} ብር መሆን አለበት`);
+                showToast(`❌ መጠኑ ከ${MIN_DEPOSIT} እስከ ${MAX_DEPOSIT} ብር`);
                 return;
             }
-            const reference = prompt("የደረሰኙን ቁጥር (Transaction ID) አስገባ:");
+            const reference = prompt("የደረሰኙ ቁጥር:");
             if (!reference || reference.trim() === '') return;
             closeDepositModal();
-            depositInFlight = true;
             try {
                 const res = await fetch(`${API_BASE_URL}/api/deposit`, {
                     method: 'POST', headers: authHeaders(),
-                    body: JSON.stringify({ amount: amount, method: method, reference: reference.trim() })
+                    body: JSON.stringify({ amount, method, reference: reference.trim() })
                 });
-                let data = {};
-                try { data = await res.json(); } catch (_) { data = {}; }
-                if (res.ok) showToast("✅ የክፍያ ጥያቄዎ ተልኳል!");
-                else showToast("❌ " + (data.detail || `ስህተት (${res.status})`));
-            } catch (e) { showToast("❌ የኢንተርኔት ስህተት"); }
-            finally { depositInFlight = false; }
+                const data = await res.json();
+                if (res.ok) showToast("✅ ጥያቄዎ ተልኳል!");
+                else showToast("❌ " + (data.detail || 'ስህተት'));
+            } catch (e) { showToast("❌ ስህተት"); }
+        }
+
+        async function submitWithdrawal() {
+            const amount = parseFloat(document.getElementById('withdrawAmount').value);
+            const method = document.getElementById('withdrawMethod').value;
+            const account = document.getElementById('withdrawAccount').value.trim();
+            const name = document.getElementById('withdrawName').value.trim();
+            if (!amount || amount < 50) { showToast("❌ ዝቅተኛ 50 ብር"); return; }
+            if (!account || account.length < 5) { showToast("❌ የአካውንት ቁጥር ያስፈልጋል"); return; }
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/withdrawal`, {
+                    method: 'POST', headers: authHeaders(),
+                    body: JSON.stringify({ amount, method, account_number: account, account_name: name || null })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast("✅ የማውጣት ጥያቄዎ ተልኳል");
+                    closeWithdrawModal();
+                    await fetchMe();
+                } else showToast("❌ " + (data.detail || 'ስህተት'));
+            } catch (e) { showToast("❌ ስህተት"); }
         }
 
         async function buyCard() {
             if (isBuying || currentGameStatus !== 'waiting' || myCardNumbers.length > 0) {
-                showToast("ካርድ መግዛት አይቻልም");
-                return;
+                showToast("ካርድ መግዛት አይቻልም"); return;
             }
-            if (!currentGameId) { showToast("ጨዋታው ገና አልተጫነም"); return; }
-            if (!isGameTrusted()) {
-                showToast("⏳ የጨዋታ ሁኔታ በመገናኘት ላይ ነው። እባክዎ ቆይተው ይሞክሩ።");
-                return;
-            }
-            if (cardError) { showToast("⚠️ የካርድ ስህተት — እባክዎ ገጹን ያድሱ"); return; }
-            isBuying = true;
-            updateBuyButton();
-            const gameId = currentGameId;
+            if (!isGameTrusted()) { showToast("⏳ በመገናኘት ላይ"); return; }
+            isBuying = true; updateBuyButton();
             try {
                 const res = await fetch(`${API_BASE_URL}/api/buy_card`, {
                     method: 'POST', headers: authHeaders(),
-                    body: JSON.stringify({ game_id: gameId })
+                    body: JSON.stringify({ game_id: currentGameId })
                 });
-                let data = {};
-                try { data = await res.json(); } catch (_) { data = {}; }
+                const data = await res.json();
                 if (res.ok) {
-                    if (currentGameId === gameId) {
-                        showToast("🎉 ካርድ ገዝተዋል!");
-                        await fetchMe();
-                        await fetchMyCard();
-                        await fetchGameState(true);
-                    } else {
-                        showToast("የጨዋታ ሁኔታ ተቀይሯል። እባክዎ ያረጋግጡ።");
-                        await loadCurrentGame();
-                        await fetchMyCard();
-                        await fetchGameState(true);
-                    }
-                } else showToast("❌ " + (data.detail || `ስህተት (${res.status})`));
-            } catch (e) { showToast("❌ የኢንተርኔት ስህተት"); }
+                    showToast("🎉 ካርድ ገዝተዋል!");
+                    await fetchMe();
+                    await fetchMyCard();
+                    await fetchGameState();
+                } else showToast("❌ " + (data.detail || 'ስህተት'));
+            } catch (e) { showToast("❌ ስህተት"); }
             finally { isBuying = false; updateBuyButton(); }
         }
 
-        // ✅ አዲስ: ሰንጠረዥ
-        function openLeaderboard() {
-            document.getElementById('leaderboardModal').classList.add('show');
-            fetchLeaderboard();
-        }
+        // LEADERBOARD
+        function openLeaderboard() { document.getElementById('leaderboardModal').classList.add('show'); fetchLeaderboard(); }
         function closeLeaderboard() { document.getElementById('leaderboardModal').classList.remove('show'); }
-
         async function fetchLeaderboard() {
             const content = document.getElementById('leaderboard-content');
             content.innerHTML = '<p>በመጫን ላይ...</p>';
@@ -671,219 +622,362 @@
                 const res = await fetchWithRetry(`${API_BASE_URL}/api/leaderboard`);
                 const data = await res.json();
                 if (!data.leaderboard || data.leaderboard.length === 0) {
-                    content.innerHTML = '<p style="padding: 20px;">🏆 እስካሁን አሸናፊ የለም።<br>የመጀመሪያው ያሸንፉ!</p>';
-                    return;
+                    content.innerHTML = '<p style="padding:20px;">🏆 እስካሁን አሸናፊ የለም</p>'; return;
                 }
                 content.innerHTML = '';
                 data.leaderboard.forEach(item => {
+                    const medal = item.rank === 1 ? '🥇' : item.rank === 2 ? '🥈' : item.rank === 3 ? '🥉' : item.rank;
                     const div = document.createElement('div');
                     div.className = 'lb-item';
-                    const medal = item.rank === 1 ? '🥇' : item.rank === 2 ? '🥈' : item.rank === 3 ? '🥉' : item.rank;
-                    const rankSpan = document.createElement('div');
-                    rankSpan.className = 'lb-rank';
-                    rankSpan.textContent = medal;
-                    const userDiv = document.createElement('div');
-                    userDiv.className = 'lb-user';
-                    const nameDiv = document.createElement('div');
-                    nameDiv.className = 'lb-name';
-                    nameDiv.textContent = item.username;
-                    const winsDiv = document.createElement('div');
-                    winsDiv.className = 'lb-wins';
-                    winsDiv.textContent = `${item.win_count} ጊዜ አሸንፏል`;
-                    userDiv.appendChild(nameDiv); userDiv.appendChild(winsDiv);
-                    const amountDiv = document.createElement('div');
-                    amountDiv.className = 'lb-amount';
-                    amountDiv.textContent = `${item.total_won.toFixed(2)} ብር`;
-                    div.appendChild(rankSpan); div.appendChild(userDiv); div.appendChild(amountDiv);
+                    div.innerHTML = `<div class="lb-rank">${medal}</div>
+                        <div class="lb-user"><div class="lb-name">${item.username}</div>
+                        <div class="lb-wins">${item.win_count} ጊዜ አሸንፏል</div></div>
+                        <div class="lb-amount">${item.total_won.toFixed(2)} ብር</div>`;
                     content.appendChild(div);
                 });
-            } catch (e) {
-                content.innerHTML = '<p style="color:#d32f2f;">❌ ማምጣት አልተቻለም። እባክዎ እንደገና ይሞክሩ።</p>';
-            }
+            } catch (e) { content.innerHTML = '<p style="color:#d32f2f;">❌ ስህተት</p>'; }
         }
 
-        // ✅ አዲስ: ታሪክ
-        function openHistory() {
-            document.getElementById('historyModal').classList.add('show');
-            fetchHistory();
-        }
+        // HISTORY
+        function openHistory() { document.getElementById('historyModal').classList.add('show'); fetchHistory(); }
         function closeHistory() { document.getElementById('historyModal').classList.remove('show'); }
-
         async function fetchHistory() {
             const content = document.getElementById('history-content');
             content.innerHTML = '<p>በመጫን ላይ...</p>';
             try {
-                const res = await fetchWithRetry(`${API_BASE_URL}/api/history`, { headers: authHeaders() });
-                if (!res.ok) { content.innerHTML = '<p style="color:#d32f2f;">❌ ፈቃድ የለዎትም</p>'; return; }
+                const res = await fetch(`${API_BASE_URL}/api/history`, { headers: authHeaders() });
+                if (!res.ok) { content.innerHTML = '<p>❌ ፈቃድ የለዎትም</p>'; return; }
                 const data = await res.json();
                 if (!data.history || data.history.length === 0) {
-                    content.innerHTML = '<p style="padding: 20px;">📜 እስካሁን ምንም ግብይት የለም።</p>';
-                    return;
+                    content.innerHTML = '<p style="padding:20px;">📜 እስካሁን ምንም ግብይት የለም</p>'; return;
                 }
-                content.innerHTML = '';
-                const typeInfo = {
-                    'deposit_approved': { icon: '💰', label: 'ገንዘብ ማስገባት', sign: '+' },
-                    'card_purchase': { icon: '🎫', label: 'ካርድ ግዢ', sign: '-' },
-                    'refund': { icon: '↩️', label: 'ገንዘብ መመለስ', sign: '+' },
-                    'prize_payout': { icon: '🏆', label: 'ሽልማት', sign: '+' }
+                const types = {
+                    'deposit_approved': {icon:'💰', label:'ገንዘብ ማስገባት'},
+                    'card_purchase': {icon:'🎫', label:'ካርድ ግዢ'},
+                    'refund': {icon:'↩️', label:'ገንዘብ መመለስ'},
+                    'prize_payout': {icon:'🏆', label:'ሽልማት'},
+                    'withdrawal_pending': {icon:'💸', label:'ማውጣት ጥያቄ'},
+                    'withdrawal_refund': {icon:'↩️', label:'ማውጣት ተመልሷል'},
+                    'admin_adjustment': {icon:'⚙️', label:'Admin ማስተካከያ'}
                 };
+                content.innerHTML = '';
                 data.history.forEach(item => {
-                    const info = typeInfo[item.type] || { icon: '📌', label: item.type, sign: '+' };
+                    const info = types[item.type] || {icon:'📌', label:item.type};
                     const div = document.createElement('div');
                     div.className = 'hist-item';
-                    const iconDiv = document.createElement('div');
-                    iconDiv.className = 'hist-icon';
-                    iconDiv.textContent = info.icon;
-                    const infoDiv = document.createElement('div');
-                    infoDiv.className = 'hist-info';
-                    const typeDiv = document.createElement('div');
-                    typeDiv.className = 'hist-type';
-                    typeDiv.textContent = info.label;
-                    const dateDiv = document.createElement('div');
-                    dateDiv.className = 'hist-date';
-                    dateDiv.textContent = item.created_at;
-                    infoDiv.appendChild(typeDiv); infoDiv.appendChild(dateDiv);
-                    const amountDiv = document.createElement('div');
-                    amountDiv.className = 'hist-amount ' + (item.amount >= 0 ? 'pos' : 'neg');
-                    amountDiv.textContent = `${info.sign}${Math.abs(item.amount).toFixed(2)} ብር`;
-                    div.appendChild(iconDiv); div.appendChild(infoDiv); div.appendChild(amountDiv);
+                    div.innerHTML = `<div class="hist-icon">${info.icon}</div>
+                        <div class="hist-info"><div class="hist-type">${info.label}</div>
+                        <div class="hist-date">${item.created_at}</div></div>
+                        <div class="hist-amount ${item.amount >= 0 ? 'pos' : 'neg'}">${item.amount >= 0 ? '+' : ''}${item.amount.toFixed(2)} ብር</div>`;
                     content.appendChild(div);
                 });
-            } catch (e) {
-                content.innerHTML = '<p style="color:#d32f2f;">❌ ማምጣት አልተቻለም። እባክዎ እንደገና ይሞክሩ።</p>';
-            }
+            } catch (e) { content.innerHTML = '<p style="color:#d32f2f;">❌ ስህተት</p>'; }
         }
 
+        // ADMIN PANEL
         function openAdminPanel() {
             document.getElementById('adminModal').classList.add('show');
-            fetchPendingDeposits();
+            switchTab('dashboard');
         }
         function closeAdminModal() { document.getElementById('adminModal').classList.remove('show'); }
 
-        async function fetchPendingDeposits() {
-            const content = document.getElementById('admin-content');
-            content.innerHTML = '<p>በመጫን ላይ...</p>';
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('#adminTabs .tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('tab-' + tab).classList.add('active');
+            if (tab === 'dashboard') loadDashboard();
+            else if (tab === 'deposits') loadDeposits();
+            else if (tab === 'withdrawals') loadWithdrawals();
+            else if (tab === 'players') loadPlayers();
+            else if (tab === 'admins') loadAdmins();
+            else if (tab === 'audit') loadAudit();
+        }
+
+        async function loadDashboard() {
+            const el = document.getElementById('tab-dashboard');
+            el.innerHTML = '<p>በመጫን ላይ...</p>';
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/stats`, { headers: authHeaders() });
+                if (!res.ok) { el.innerHTML = '<p>❌ ፈቃድ የለዎትም</p>'; return; }
+                const d = await res.json();
+                el.innerHTML = `
+                    <div class="stats-row">
+                        <div class="stat-card"><div class="num">${d.players.total}</div><div class="lbl">ተጫዋቾች</div></div>
+                        <div class="stat-card"><div class="num">${d.players.banned}</div><div class="lbl">የተገዱ</div></div>
+                        <div class="stat-card"><div class="num">${d.pending.deposits}</div><div class="lbl">በመጠባበቅ</div></div>
+                        <div class="stat-card"><div class="num">${d.pending.withdrawals}</div><div class="lbl">ማውጣት</div></div>
+                        <div class="stat-card"><div class="num">${d.money.total_deposited.toFixed(0)}</div><div class="lbl">ገቢ ብር</div></div>
+                        <div class="stat-card"><div class="num">${d.money.total_payouts.toFixed(0)}</div><div class="lbl">ሽልማት ብር</div></div>
+                    </div>`;
+            } catch (e) { el.innerHTML = '<p>❌ ስህተት</p>'; }
+        }
+
+        async function loadDeposits() {
+            const el = document.getElementById('tab-deposits');
+            el.innerHTML = '<p>በመጫን ላይ...</p>';
             try {
                 const res = await fetch(`${API_BASE_URL}/api/admin/pending`, { headers: authHeaders() });
-                if (!res.ok) { content.innerHTML = '<p>❌ ፈቃድ የለዎትም</p>'; return; }
+                if (!res.ok) { el.innerHTML = '<p>❌ ፈቃድ የለዎትም</p>'; return; }
                 const data = await res.json();
-                if (!data.pending || data.pending.length === 0) {
-                    content.innerHTML = '<p>✅ ምንም የተጠባባቂ ክፍያ የለም።</p>';
-                    return;
-                }
-                content.innerHTML = '';
+                if (!data.pending || data.pending.length === 0) { el.innerHTML = '<p>✅ ምንም የተጠባባቂ የለም</p>'; return; }
+                el.innerHTML = '';
                 data.pending.forEach(item => {
                     const div = document.createElement('div');
                     div.className = 'admin-item';
-                    const pId = document.createElement('p'); pId.innerHTML = `<b>ID:</b> `;
-                    pId.appendChild(document.createTextNode(item.user_telegram_id));
-                    const pUser = document.createElement('p'); pUser.innerHTML = `<b>Username:</b> `;
-                    pUser.appendChild(document.createTextNode(item.username || 'N/A'));
-                    const pAmount = document.createElement('p'); pAmount.innerHTML = `<b>መጠን:</b> `;
-                    pAmount.appendChild(document.createTextNode(item.amount + ' ብር'));
-                    const pMethod = document.createElement('p'); pMethod.innerHTML = `<b>መንገድ:</b> `;
-                    pMethod.appendChild(document.createTextNode(item.method));
-                    const pRef = document.createElement('p'); pRef.innerHTML = `<b>ደረሰኝ:</b> `;
-                    pRef.appendChild(document.createTextNode(item.reference));
-                    const pDate = document.createElement('p'); pDate.innerHTML = `<b>ቀን:</b> `;
-                    pDate.appendChild(document.createTextNode(item.created_at));
-                    const btnApprove = document.createElement('button');
-                    btnApprove.className = 'approve-btn';
-                    btnApprove.textContent = '✅ ፍቀድ';
-                    btnApprove.onclick = () => approveDeposit(item.id, btnApprove, btnReject);
-                    const btnReject = document.createElement('button');
-                    btnReject.className = 'reject-btn';
-                    btnReject.textContent = '❌ ከልክል';
-                    btnReject.onclick = () => rejectDeposit(item.id, btnApprove, btnReject);
-                    div.appendChild(pId); div.appendChild(pUser); div.appendChild(pAmount);
-                    div.appendChild(pMethod); div.appendChild(pRef); div.appendChild(pDate);
-                    div.appendChild(btnApprove); div.appendChild(btnReject);
-                    content.appendChild(div);
+                    div.innerHTML = `<p><b>ID:</b> ${item.user_telegram_id}</p>
+                        <p><b>User:</b> ${item.username || 'N/A'}</p>
+                        <p><b>መጠን:</b> ${item.amount} ብር</p>
+                        <p><b>መንገድ:</b> ${item.method}</p>
+                        <p><b>ደረሰኝ:</b> ${item.reference}</p>
+                        <p><b>ቀን:</b> ${item.created_at}</p>`;
+                    const bA = document.createElement('button');
+                    bA.className = 'approve-btn'; bA.textContent = '✅ ፍቀድ';
+                    bA.onclick = () => approveDeposit(item.id);
+                    const bR = document.createElement('button');
+                    bR.className = 'reject-btn'; bR.textContent = '❌ ከልክል';
+                    bR.onclick = () => rejectDeposit(item.id);
+                    div.appendChild(bA); div.appendChild(bR);
+                    el.appendChild(div);
                 });
-            } catch (e) { content.innerHTML = '<p>❌ ስህተት</p>'; }
+            } catch (e) { el.innerHTML = '<p>❌ ስህተት</p>'; }
         }
 
-        async function approveDeposit(id, btnApprove, btnReject) {
-            if (adminActionInFlight) { showToast("⏳ ቀድሞ የተላከ ክወና በመካሄድ ላይ ነው"); return; }
-            if (!confirm("ይህንን ክፍያ ፍቀድ?")) return;
-            adminActionInFlight = true;
-            if (btnApprove) btnApprove.disabled = true;
-            if (btnReject) btnReject.disabled = true;
+        async function approveDeposit(id) {
+            if (!confirm('ፍቀድ?')) return;
             try {
-                const res = await fetch(`${API_BASE_URL}/api/admin/approve/${id}`, {
-                    method: 'POST', headers: authHeaders()
-                });
-                let data = {};
-                try { data = await res.json(); } catch (_) { data = {}; }
-                if (res.ok) {
-                    showToast("✅ ተፈቅዷል!");
-                    await fetchPendingDeposits();
-                    await fetchMe();
-                    await updateAdminBadge();
-                } else {
-                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`));
-                    if (btnApprove) btnApprove.disabled = false;
-                    if (btnReject) btnReject.disabled = false;
-                }
-            } catch (e) {
-                showToast("❌ ስህተት");
-                if (btnApprove) btnApprove.disabled = false;
-                if (btnReject) btnReject.disabled = false;
-            } finally { adminActionInFlight = false; }
+                const res = await fetch(`${API_BASE_URL}/api/admin/approve/${id}`, {method:'POST', headers: authHeaders()});
+                const data = await res.json();
+                if (res.ok) { showToast('✅ ተፈቅዷል'); loadDeposits(); updateAdminBadge(); }
+                else showToast('❌ ' + (data.detail || 'ስህተት'));
+            } catch (e) { showToast('❌ ስህተት'); }
         }
-
-        async function rejectDeposit(id, btnApprove, btnReject) {
-            if (adminActionInFlight) { showToast("⏳ ቀድሞ የተላከ ክወና በመካሄድ ላይ ነው"); return; }
-            if (!confirm("ይህንን ክፍያ ከልክል?")) return;
-            adminActionInFlight = true;
-            if (btnApprove) btnApprove.disabled = true;
-            if (btnReject) btnReject.disabled = true;
+        async function rejectDeposit(id) {
+            if (!confirm('ከልክል?')) return;
             try {
-                const res = await fetch(`${API_BASE_URL}/api/admin/reject/${id}`, {
-                    method: 'POST', headers: authHeaders()
-                });
-                let data = {};
-                try { data = await res.json(); } catch (_) { data = {}; }
-                if (res.ok) {
-                    showToast("✅ ተከልክሏል!");
-                    await fetchPendingDeposits();
-                    await updateAdminBadge();
-                } else {
-                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`));
-                    if (btnApprove) btnApprove.disabled = false;
-                    if (btnReject) btnReject.disabled = false;
-                }
-            } catch (e) {
-                showToast("❌ ስህተት");
-                if (btnApprove) btnApprove.disabled = false;
-                if (btnReject) btnReject.disabled = false;
-            } finally { adminActionInFlight = false; }
+                const res = await fetch(`${API_BASE_URL}/api/admin/reject/${id}`, {method:'POST', headers: authHeaders()});
+                if (res.ok) { showToast('✅ ተከልክሏል'); loadDeposits(); updateAdminBadge(); }
+                else showToast('❌ ስህተት');
+            } catch (e) { showToast('❌ ስህተት'); }
         }
 
-        function shouldPoll() { return isPolling && document.visibilityState === 'visible'; }
+        async function loadWithdrawals() {
+            const el = document.getElementById('tab-withdrawals');
+            el.innerHTML = '<p>በመጫን ላይ...</p>';
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/withdrawals`, { headers: authHeaders() });
+                if (!res.ok) { el.innerHTML = '<p>❌ ፈቃድ የለዎትም</p>'; return; }
+                const data = await res.json();
+                if (!data.withdrawals || data.withdrawals.length === 0) { el.innerHTML = '<p>✅ ምንም የለም</p>'; return; }
+                el.innerHTML = '';
+                data.withdrawals.forEach(w => {
+                    const div = document.createElement('div');
+                    div.className = 'admin-item';
+                    div.innerHTML = `<p><b>User:</b> ${w.username || w.user_telegram_id}</p>
+                        <p><b>መጠን:</b> ${w.amount} ብር</p>
+                        <p><b>መንገድ:</b> ${w.method}</p>
+                        <p><b>አካውንት:</b> ${w.account_number}</p>
+                        <p><b>Status:</b> ${w.status}</p>
+                        <p><b>ቀን:</b> ${w.created_at}</p>`;
+                    if (w.status === 'pending') {
+                        const bA = document.createElement('button');
+                        bA.className = 'approve-btn'; bA.textContent = '✅ ተከፍሏል';
+                        bA.onclick = () => approveWithdrawal(w.id);
+                        const bR = document.createElement('button');
+                        bR.className = 'reject-btn'; bR.textContent = '❌ ከልክል';
+                        bR.onclick = () => rejectWithdrawal(w.id);
+                        div.appendChild(bA); div.appendChild(bR);
+                    }
+                    el.appendChild(div);
+                });
+            } catch (e) { el.innerHTML = '<p>❌ ስህተት</p>'; }
+        }
+
+        async function approveWithdrawal(wid) {
+            const ref = prompt('የክፍያ ማስረጃ ቁጥር:');
+            if (!ref) return;
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/withdrawal/${wid}/approve`, {
+                    method: 'POST', headers: authHeaders(),
+                    body: JSON.stringify({ reference: ref })
+                });
+                if (res.ok) { showToast('✅ ተፈቅዷል'); loadWithdrawals(); }
+                else showToast('❌ ስህተት');
+            } catch (e) { showToast('❌ ስህተት'); }
+        }
+        async function rejectWithdrawal(wid) {
+            if (!confirm('ከልክል? ባላንስ ይመለሳል')) return;
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/withdrawal/${wid}/reject`, {method:'POST', headers: authHeaders()});
+                if (res.ok) { showToast('✅ ተከልክሏል'); loadWithdrawals(); }
+                else showToast('❌ ስህተት');
+            } catch (e) { showToast('❌ ስህተት'); }
+        }
+
+        async function loadPlayers() {
+            const el = document.getElementById('tab-players');
+            el.innerHTML = `<input type="text" class="input-field" id="playerSearch" placeholder="🔍 በስም ወይም ID ፈልግ..." oninput="searchPlayers()">
+                <div id="players-list"><p>በመጫን ላይ...</p></div>`;
+            await fetchPlayers('');
+        }
+        let searchTimer = null;
+        function searchPlayers() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => fetchPlayers(document.getElementById('playerSearch').value.trim()), 400);
+        }
+        async function fetchPlayers(term) {
+            const el = document.getElementById('players-list');
+            if (!el) return;
+            el.innerHTML = '<p>በመጫን ላይ...</p>';
+            try {
+                const url = term ? `${API_BASE_URL}/api/admin/players?search=${encodeURIComponent(term)}` : `${API_BASE_URL}/api/admin/players`;
+                const res = await fetch(url, { headers: authHeaders() });
+                if (!res.ok) { el.innerHTML = '<p>❌ ፈቃድ የለዎትም</p>'; return; }
+                const data = await res.json();
+                if (!data.players || data.players.length === 0) { el.innerHTML = '<p>ምንም አልተገኘም</p>'; return; }
+                el.innerHTML = '';
+                data.players.forEach(u => {
+                    const div = document.createElement('div');
+                    div.className = 'user-card';
+                    const banned = u.is_banned ? '<span class="banned-tag">🚫</span>' : '';
+                    const flagged = u.is_flagged ? ' ⚠️' : '';
+                    div.innerHTML = `<div class="user-name">${u.display_name}${banned}${flagged}</div>
+                        <div class="user-stat">🆔 <b>${u.telegram_id}</b></div>
+                        <div class="user-stat">💰 <b>${u.balance.toFixed(2)} ብር</b></div>
+                        <div class="user-stat">🎮 ${u.total_games} | 🏆 ${u.total_wins} (${u.win_rate}%)</div>`;
+                    const actions = document.createElement('div');
+                    actions.className = 'user-actions';
+                    const bBan = document.createElement('button');
+                    bBan.className = u.is_banned ? 'btn-unban' : 'btn-ban';
+                    bBan.textContent = u.is_banned ? '✅ አንሳ' : '🚫 አግድ';
+                    bBan.onclick = () => toggleBan(u.id);
+                    const bDet = document.createElement('button');
+                    bDet.className = 'btn-detail'; bDet.textContent = '📋 ዝርዝር';
+                    bDet.onclick = () => showPlayerDetail(u.id);
+                    actions.appendChild(bBan); actions.appendChild(bDet);
+                    div.appendChild(actions);
+                    el.appendChild(div);
+                });
+            } catch (e) { el.innerHTML = '<p>❌ ስህተት</p>'; }
+        }
+        async function toggleBan(uid) {
+            if (!confirm('እርግጠኛ?')) return;
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/player/${uid}/ban`, {method:'POST', headers: authHeaders()});
+                if (res.ok) { showToast('✅ ተስተካክሏል'); searchPlayers(); }
+                else showToast('❌ ስህተት');
+            } catch (e) { showToast('❌ ስህተት'); }
+        }
+        async function showPlayerDetail(uid) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/player/${uid}/full`, { headers: authHeaders() });
+                if (!res.ok) { showToast('❌ ስህተት'); return; }
+                const d = await res.json();
+                alert(`📋 ${d.user.display_name}\n` +
+                    `🆔 ${d.user.telegram_id}\n` +
+                    `💰 ${d.user.balance.toFixed(2)} ብር\n` +
+                    `🎮 ${d.stats.total_games} | 🏆 ${d.stats.total_wins}\n` +
+                    `💵 ያስገቡ: ${d.stats.total_deposited}\n` +
+                    `🎁 ያሸነፉ: ${d.stats.total_won}`);
+            } catch (e) { showToast('❌ ስህተት'); }
+        }
+
+        async function loadAdmins() {
+            const el = document.getElementById('tab-admins');
+            el.innerHTML = '<p>በመጫን ላይ...</p>';
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/list`, { headers: authHeaders() });
+                if (!res.ok) { el.innerHTML = '<p>❌ ፈቃድ የለዎትም</p>'; return; }
+                const data = await res.json();
+                let html = `<button class="approve-btn" onclick="createNewAdmin()" style="margin-bottom:10px;">➕ አዲስ Admin ፍጠር</button>`;
+                data.admins.forEach(a => {
+                    html += `<div class="admin-item">
+                        <p><b>${a.display_name}</b></p>
+                        <p>🆔 ${a.telegram_id}</p>
+                        <p>Role: <b>${a.role}</b> ${a.is_super ? '👑' : ''}</p>
+                        <p>Status: ${a.is_active ? '✅ ንቁ' : '⛔ ጠፍቷል'}</p>
+                        <p>Login: ${a.last_login}</p>
+                        ${!a.is_super ? `<button class="approve-btn" onclick="toggleAdmin(${a.id})">${a.is_active ? '⛔ አሰናክል' : '✅ አግብር'}</button>
+                        <button class="reject-btn" onclick="deleteAdmin(${a.id})">🗑️ ሰርዝ</button>` : ''}
+                    </div>`;
+                });
+                el.innerHTML = html;
+            } catch (e) { el.innerHTML = '<p>❌ ስህተት</p>'; }
+        }
+        async function createNewAdmin() {
+            const tid = prompt('Telegram ID:'); if (!tid) return;
+            const name = prompt('Display Name:'); if (!name) return;
+            const role = prompt('Role (sub_admin/finance_admin/moderator/viewer):', 'sub_admin');
+            if (!role) return;
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/create`, {
+                    method: 'POST', headers: authHeaders(),
+                    body: JSON.stringify({ telegram_id: tid, display_name: name, role })
+                });
+                const d = await res.json();
+                if (res.ok) { showToast('✅ Admin ተፈጥሯል'); loadAdmins(); }
+                else showToast('❌ ' + (d.detail || 'ስህተት'));
+            } catch (e) { showToast('❌ ስህተት'); }
+        }
+        async function toggleAdmin(id) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/${id}/toggle`, {method:'POST', headers: authHeaders()});
+                if (res.ok) { showToast('✅ ተስተካክሏል'); loadAdmins(); }
+                else showToast('❌ ስህተት');
+            } catch (e) { showToast('❌ ስህተት'); }
+        }
+        async function deleteAdmin(id) {
+            if (!confirm('ሰርዝ?')) return;
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/${id}`, {method:'DELETE', headers: authHeaders()});
+                if (res.ok) { showToast('✅ ተሰርዟል'); loadAdmins(); }
+                else showToast('❌ ስህተት');
+            } catch (e) { showToast('❌ ስህተት'); }
+        }
+
+        async function loadAudit() {
+            const el = document.getElementById('tab-audit');
+            el.innerHTML = '<p>በመጫን ላይ...</p>';
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/audit?limit=50`, { headers: authHeaders() });
+                if (!res.ok) { el.innerHTML = '<p>❌ ፈቃድ የለዎትም</p>'; return; }
+                const data = await res.json();
+                if (!data.logs || data.logs.length === 0) { el.innerHTML = '<p>ምንም ታሪክ የለም</p>'; return; }
+                el.innerHTML = '';
+                data.logs.forEach(l => {
+                    const div = document.createElement('div');
+                    div.className = 'admin-item';
+                    div.innerHTML = `<p><b>${l.actor_username || l.actor_id}</b> (${l.actor_role || 'N/A'})</p>
+                        <p>Action: <b>${l.action}</b></p>
+                        <p>Target: ${l.target_type || '-'} #${l.target_id || '-'}</p>
+                        <p style="font-size:11px;">${l.details || ''}</p>
+                        <p style="font-size:11px; color:#999;">${l.created_at}</p>`;
+                    el.appendChild(div);
+                });
+            } catch (e) { el.innerHTML = '<p>❌ ስህተት</p>'; }
+        }
+
+        // POLLING
+        function shouldPoll() { return document.visibilityState === 'visible'; }
         async function pollGameState() {
-            if (!shouldPoll()) { setTimeout(pollGameState, 3000); return; }
-            await fetchGameState();
+            if (shouldPoll()) await fetchGameState();
             setTimeout(pollGameState, 3000);
         }
         async function pollMyCard() {
-            if (!shouldPoll()) { setTimeout(pollMyCard, 10000); return; }
-            await fetchMyCard();
+            if (shouldPoll()) await fetchMyCard();
             setTimeout(pollMyCard, 10000);
         }
         async function pollCurrentGame() {
-            if (!shouldPoll()) { setTimeout(pollCurrentGame, 15000); return; }
-            await loadCurrentGame();
+            if (shouldPoll()) await loadCurrentGame();
             setTimeout(pollCurrentGame, 15000);
         }
         async function pollMe() {
-            if (!shouldPoll()) { setTimeout(pollMe, 15000); return; }
-            await fetchMe();
+            if (shouldPoll()) await fetchMe();
             setTimeout(pollMe, 15000);
         }
         async function pollAdminBadge() {
-            if (!shouldPoll()) { setTimeout(pollAdminBadge, 15000); return; }
-            await updateAdminBadge();
+            if (shouldPoll()) await updateAdminBadge();
             setTimeout(pollAdminBadge, 15000);
         }
 
@@ -895,7 +989,7 @@
                 result = await loadCurrentGame();
                 retries++;
             }
-            if (!result.ok) showToast("⚠️ ሰርቨሩ ሊነቃ አልቻለም። እባክዎ ቆይተው እንደገና ይሞክሩ።");
+            if (!result.ok) showToast("⚠️ ሰርቨሩ ሊነቃ አልቻለም");
             await fetchMe();
             await fetchMyCard();
             await fetchGameState();
