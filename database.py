@@ -1,11 +1,11 @@
 """
 =====================================================================
-✅ የዳታቤዝ ማዋቀሪያ (database.py)
+✅ የዳታቤዝ ማዋቀሪያ (database.py) - v8.1 FINAL
 =====================================================================
-- PostgreSQL-only
-- psycopg3 (v3) driver
-- Connection pooling ለProduction
-- UTC timezone
+✅ Fail-fast: DATABASE_URL ካልተዋቀረ አፑ ፈጽሞ አይነሳም
+✅ psycopg2 driver (requirements.txt ጋር ይጣጣማል)
+✅ pool_pre_ping + pool_recycle
+✅ UTC timezone
 =====================================================================
 """
 from sqlalchemy import create_engine, event
@@ -18,9 +18,12 @@ logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# ✅ Fail-fast: Production ላይ fallback የለም
 if not DATABASE_URL:
-    DATABASE_URL = "postgresql+psycopg://user:password@localhost/bingo"
-    logger.warning("⚠️ DATABASE_URL not set, using fallback!")
+    raise RuntimeError(
+        "❌ DATABASE_URL must be configured before startup. "
+        "Aborting to prevent data corruption."
+    )
 
 # ✅ Heroku/Render style URL ማስተካከል
 if DATABASE_URL.startswith("postgres://"):
@@ -30,12 +33,9 @@ if DATABASE_URL.startswith("postgres://"):
 if not DATABASE_URL.startswith("postgresql://"):
     raise RuntimeError("❌ PostgreSQL URL ብቻ ይፈቀዳል!")
 
-# ✅ psycopg3 (v3) driver ን ተጠቀም - Python 3.14 ይደግፋል!
-DATABASE_URL = DATABASE_URL.replace(
-    "postgresql://", "postgresql+psycopg://", 1
-)
+# ✅ psycopg2 driver ን ተጠቀም (requirements.txt ጋር ይጣጣማል)
+DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 
-# ==================== Engine መፍጠር ====================
 engine = create_engine(
     DATABASE_URL,
     poolclass=QueuePool,
@@ -47,7 +47,6 @@ engine = create_engine(
     future=True,
 )
 
-# ==================== Session Factory ====================
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
