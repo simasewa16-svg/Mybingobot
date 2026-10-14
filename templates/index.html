@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title> ኢትዮጵያዬ!</title>
+    <title>ሃ ቡንላ ከድራ!</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -75,13 +75,13 @@
             bottom: 30px; 
             left: 50%; 
             transform: translateX(-50%) translateY(100px); 
-            background: #1a1a1a; 
+            background: #323232; 
             color: white; 
             padding: 18px 24px; 
             border-radius: 12px; 
-            font-size: 18px; /* ትልቅ ፊደል */
+            font-size: 18px; 
             font-weight: bold; 
-            z-index: 99999; /* ከሁሉም ነገር በላይ */
+            z-index: 99999; 
             opacity: 0; 
             transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55); 
             max-width: 90%; 
@@ -91,27 +91,28 @@
             border-left: 6px solid #ff9800;
         }
         .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .toast.success { background: #2e7d32; border-left-color: #81c784; }
+        .toast.error { background: #c62828; border-left-color: #ef5350; }
         
-        /* ✅ አዲስ የሙሉ ስክሪን Loading Overlay */
+        /* ✅ አዲስ የሙሉ ስክሪን Loading Overlay (ነጭ ዳራ፣ ጥቁር ፅሁፍ) */
         .loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(255, 255, 255, 0.95);
             display: none; flex-direction: column; align-items: center; justify-content: center;
             z-index: 10000; padding: 20px; text-align: center;
         }
         .loading-overlay.show { display: flex; }
         .spinner-large {
             width: 70px; height: 70px;
-            border: 8px solid rgba(255,255,255,0.2);
+            border: 8px solid rgba(106,27,154,0.1);
             border-radius: 50%;
-            border-top-color: #ff9800;
+            border-top-color: #6a1b9a;
             animation: spin 1s linear infinite;
             margin-bottom: 25px;
         }
         .loading-text {
-            color: white; font-size: 22px; font-weight: bold;
-            line-height: 1.6; text-shadow: 1px 1px 5px rgba(0,0,0,0.8);
-            max-width: 85%;
+            color: #333; font-size: 20px; font-weight: bold;
+            line-height: 1.6; max-width: 85%;
         }
         
         .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; }
@@ -153,6 +154,17 @@
         .stat-card .lbl { font-size: 11px; color: #666; margin-top: 4px; }
         .stats-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
         .input-field { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 8px; }
+        
+        /* ✅ አዲስ የCustom Confirm/Prompt Modal ስታይሎች */
+        .custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 100005; padding: 15px; }
+        .custom-modal-overlay.show { display: flex; }
+        .custom-modal-box { background: white; padding: 25px 20px; border-radius: 15px; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 5px 20px rgba(0,0,0,0.3); }
+        .custom-modal-box p { font-size: 17px; color: #333; margin-bottom: 20px; font-weight: bold; line-height: 1.5; }
+        .custom-modal-actions { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }
+        .custom-modal-actions button { padding: 14px; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; flex: 1; transition: transform 0.1s; }
+        .custom-modal-actions button:active { transform: scale(0.96); }
+        .btn-cancel { background: #d32f2f; color: white; }
+        .btn-ok { background: #4caf50; color: white; }
     </style>
 </head>
 <body>
@@ -164,7 +176,7 @@
     <!-- ✅ አዲስ የሙሉ ስክሪን Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="spinner-large"></div>
-        <div class="loading-text" id="loadingText">⏳ ሰርቨሩ በመነሳት ላይ ነው... እባክዎ ጥቂት ይጠብቁ</div>
+        <div class="loading-text" id="loadingText">⏳ እባክዎ ጥቂት ይጠብቁ...</div>
     </div>
 
     <div class="app-container">
@@ -301,6 +313,29 @@
         </div>
     </div>
 
+    <!-- ✅ አዲስ የCustom Confirm Modal -->
+    <div class="custom-modal-overlay" id="customConfirmModal">
+        <div class="custom-modal-box">
+            <p id="confirmMessage">እርግጠኛ ነዎት?</p>
+            <div class="custom-modal-actions">
+                <button class="btn-cancel" onclick="closeCustomConfirm(false)">አይ (Cancel)</button>
+                <button class="btn-ok" onclick="closeCustomConfirm(true)">አዎ (OK)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ✅ አዲስ የCustom Prompt Modal -->
+    <div class="custom-modal-overlay" id="customPromptModal">
+        <div class="custom-modal-box">
+            <p id="promptMessage">መረጃ ያስገቡ</p>
+            <input type="text" id="promptInput" class="input-field" style="margin-bottom: 15px;">
+            <div class="custom-modal-actions">
+                <button class="btn-cancel" onclick="closeCustomPrompt(false)">አይ (Cancel)</button>
+                <button class="btn-ok" onclick="closeCustomPrompt(true)">አዎ (OK)</button>
+            </div>
+        </div>
+    </div>
+
     <button class="admin-panel-btn" id="adminPanelBtn" onclick="openAdminPanel()">
         ⚙️
         <span id="admin-badge" class="badge hidden">0</span>
@@ -340,14 +375,22 @@
         let cardError = false;
         let currentTab = 'dashboard';
 
+        // ✅ የCustom Confirm እና Prompt ተለዋዋጮች
+        let confirmCallback = null;
+        let promptCallback = null;
+
         function authHeaders() {
             return { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': tg.initData || '' };
         }
 
         // ✅ የተሻሻለ የToast ማሳያ (በትልቁ እና ጎልቶ የሚታይ)
-        function showToast(msg, duration = 4000) {
+        function showToast(msg, type = 'info', duration = 4000) {
             const t = document.getElementById('toast');
             t.innerText = msg;
+            t.className = 'toast'; // Reset classes
+            if (type === 'success') t.classList.add('success');
+            else if (type === 'error') t.classList.add('error');
+            
             t.classList.add('show');
             clearTimeout(toastTimer);
             toastTimer = setTimeout(() => t.classList.remove('show'), duration);
@@ -361,6 +404,33 @@
 
         function hideLoadingOverlay() {
             document.getElementById('loadingOverlay').classList.remove('show');
+        }
+
+        // ✅ አዲስ የCustom Confirm ተግባር
+        function showCustomConfirm(msg, callback) {
+            document.getElementById('confirmMessage').innerText = msg;
+            document.getElementById('customConfirmModal').classList.add('show');
+            confirmCallback = callback;
+        }
+
+        function closeCustomConfirm(isOk) {
+            document.getElementById('customConfirmModal').classList.remove('show');
+            if (isOk && confirmCallback) confirmCallback();
+            confirmCallback = null;
+        }
+
+        // ✅ አዲስ የCustom Prompt ተግባር
+        function showCustomPrompt(msg, defaultVal, callback) {
+            document.getElementById('promptMessage').innerText = msg;
+            document.getElementById('promptInput').value = defaultVal || '';
+            document.getElementById('customPromptModal').classList.add('show');
+            promptCallback = callback;
+        }
+
+        function closeCustomPrompt(isOk) {
+            document.getElementById('customPromptModal').classList.remove('show');
+            if (isOk && promptCallback) promptCallback(document.getElementById('promptInput').value);
+            promptCallback = null;
         }
 
         // ✅ መሠረታዊ Retry
@@ -377,8 +447,8 @@
             }
         }
 
-        // ✅ የላቀ Retry — ሰርቨሩ ሲነቃ ለመጠበቅ (አሁን Loading Overlay ይጠቀማል)
-        async function fetchWithServerWakeup(url, options = {}, maxAttempts = 6, delayMs = 5000) {
+        // ✅ የላቀ Retry — ሰርቨሩ ሲነቃ ለመጠበቅ (አሁን የቴክኒክ ቃላት የሉትም)
+        async function fetchWithServerWakeup(url, options = {}, maxAttempts = 15, delayMs = 5000) {
             let lastError = null;
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
@@ -392,7 +462,8 @@
                     if (res.status === 502 || res.status === 503 || res.status === 504) {
                         lastError = new Error(`Server waking up (${res.status})`);
                         if (attempt < maxAttempts) {
-                            showLoadingOverlay(`⏳ ሙከራ ${attempt}/${maxAttempts}...\nሰርቨሩ በመነሳት ላይ ነው።\nእባክዎ ጥቂት ይጠብቁ!`);
+                            // ደንበኛው ቴክኒካዊ መረጃ እንዳያይ ቀላል መልእክት ብቻ እናሳያለን
+                            showLoadingOverlay("⏳ እባክዎ ጥቂት ይጠብቁ...\nሰርቨሩ በመነሳት ላይ ነው።");
                             await new Promise(r => setTimeout(r, delayMs));
                             continue;
                         }
@@ -406,7 +477,7 @@
                         lastError = new Error('Timeout');
                     }
                     if (attempt < maxAttempts) {
-                        showLoadingOverlay(`⏳ ሙከራ ${attempt}/${maxAttempts}...\nእባክዎ ጥቂት ይጠብቁ!`);
+                        showLoadingOverlay("⏳ እባክዎ ጥቂት ይጠብቁ...");
                         await new Promise(r => setTimeout(r, delayMs));
                         continue;
                     }
@@ -445,7 +516,8 @@
 
         async function loadCurrentGame() {
             try {
-                const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/game/current/state`, {}, 4, 5000);
+                // ከ4 ወደ 15 ሙከራ አሳድገነዋል
+                const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/game/current/state`, {}, 15, 5000);
                 const data = await res.json();
                 if (data.id) {
                     if (currentGameId !== data.id) {
@@ -647,31 +719,33 @@
         }
 
         async function selectPayment(method) {
-            const amountStr = prompt("ያስተላለፉት ገንዘብ መጠን (በብር):");
-            if (!amountStr) return;
-            const amount = Number(amountStr);
-            if (!/^\d+$/.test(amountStr.trim()) || amount < MIN_DEPOSIT || amount > MAX_DEPOSIT) {
-                showToast(`❌ መጠኑ ከ${MIN_DEPOSIT} እስከ ${MAX_DEPOSIT} ብር`);
-                return;
-            }
-            const reference = prompt("የደረሰኙ ቁጥር:");
-            if (!reference || reference.trim() === '') return;
-            closeDepositModal();
-            showLoadingOverlay("⏳ ጥያቄዎን በመላክ ላይ...");
-            try {
-                const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/deposit`, {
-                    method: 'POST', headers: authHeaders(),
-                    body: JSON.stringify({ amount, method, reference: reference.trim() })
-                }, 6, 5000);
-                let data = {};
-                try { data = await res.json(); } catch (_) { data = {}; }
-                if (res.ok) showToast("✅ ጥያቄዎ ተልኳል! Admin ያጸድቀዋል።", 5000);
-                else showToast("❌ " + (data.detail || `ስህተት (${res.status})`), 5000);
-            } catch (e) {
-                showToast("❌ ሰርቨሩ ላይሰራ ነው — ለ1 ደቂቃ ጠብቀው እንደገና ይሞክሩ", 5000);
-            } finally {
-                hideLoadingOverlay();
-            }
+            showCustomPrompt("ያስተላለፉት ገንዘብ መጠን (በብር):", "", async (amountStr) => {
+                if (!amountStr) return;
+                const amount = Number(amountStr);
+                if (!/^\d+$/.test(amountStr.trim()) || amount < MIN_DEPOSIT || amount > MAX_DEPOSIT) {
+                    showToast(`❌ መጠኑ ከ${MIN_DEPOSIT} እስከ ${MAX_DEPOSIT} ብር`, 'error');
+                    return;
+                }
+                showCustomPrompt("የደረሰኙ ቁጥር:", "", async (reference) => {
+                    if (!reference || reference.trim() === '') return;
+                    closeDepositModal();
+                    showLoadingOverlay("⏳ ጥያቄዎን በመላክ ላይ...");
+                    try {
+                        const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/deposit`, {
+                            method: 'POST', headers: authHeaders(),
+                            body: JSON.stringify({ amount, method, reference: reference.trim() })
+                        }, 15, 5000);
+                        let data = {};
+                        try { data = await res.json(); } catch (_) { data = {}; }
+                        if (res.ok) showToast("✅ ጥያቄዎ ተልኳል! Admin ያጸድቀዋል።", 'success', 5000);
+                        else showToast("❌ " + (data.detail || `ስህተት (${res.status})`), 'error', 5000);
+                    } catch (e) {
+                        showToast("❌ ሰርቨሩ ላይሰራ ነው — ለ1 ደቂቃ ጠብቀው እንደገና ይሞክሩ", 'error', 5000);
+                    } finally {
+                        hideLoadingOverlay();
+                    }
+                });
+            });
         }
 
         async function submitWithdrawal() {
@@ -679,27 +753,28 @@
             const method = document.getElementById('withdrawMethod').value;
             const account = document.getElementById('withdrawAccount').value.trim();
             const name = document.getElementById('withdrawName').value.trim();
-            if (!amount || amount < 50) { showToast("❌ ዝቅተኛ 50 ብር"); return; }
-            if (!account || account.length < 5) { showToast("❌ የአካውንት ቁጥር ያስፈልጋል"); return; }
+            if (!amount || amount < 50) { showToast("❌ ዝቅተኛ 50 ብር", 'error'); return; }
+            if (!account || account.length < 5) { showToast("❌ የአካውንት ቁጥር ያስፈልጋል", 'error'); return; }
             const currentBal = parseFloat(document.getElementById('user-balance').innerText) || 0;
-            if (currentBal < amount) { showToast("❌ በቂ ባላንስ የለዎትም"); return; }
+            if (currentBal < amount) { showToast("❌ በቂ ባላንስ የለዎትም", 'error'); return; }
+            
             showLoadingOverlay("⏳ ጥያቄዎን በመላክ ላይ...");
             try {
                 const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/withdrawal`, {
                     method: 'POST', headers: authHeaders(),
                     body: JSON.stringify({ amount, method, account_number: account, account_name: name || null })
-                }, 6, 5000);
+                }, 15, 5000);
                 let data = {};
                 try { data = await res.json(); } catch (_) { data = {}; }
                 if (res.ok) {
-                    showToast("✅ የማውጣት ጥያቄዎ ተልኳል", 5000);
+                    showToast("✅ የማውጣት ጥያቄዎ ተልኳል", 'success', 5000);
                     closeWithdrawModal();
                     await fetchMe();
                 } else {
-                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`), 5000);
+                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`), 'error', 5000);
                 }
             } catch (e) {
-                showToast("❌ ሰርቨሩ ላይሰራ ነው — ለ1 ደቂቃ ጠብቀው እንደገና ይሞክሩ", 5000);
+                showToast("❌ ሰርቨሩ ላይሰራ ነው — ለ1 ደቂቃ ጠብቀው እንደገና ይሞክሩ", 'error', 5000);
             } finally {
                 hideLoadingOverlay();
             }
@@ -707,28 +782,28 @@
 
         async function buyCard() {
             if (isBuying || currentGameStatus !== 'waiting' || myCardNumbers.length > 0) {
-                showToast("ካርድ መግዛት አይቻልም"); return;
+                showToast("ካርድ መግዛት አይቻልም", 'error'); return;
             }
-            if (!isGameTrusted()) { showToast("⏳ በመገናኘት ላይ"); return; }
+            if (!isGameTrusted()) { showToast("⏳ በመገናኘት ላይ", 'info'); return; }
             isBuying = true; updateBuyButton();
             showLoadingOverlay("⏳ ካርድ በመግዛት ላይ...");
             try {
                 const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/buy_card`, {
                     method: 'POST', headers: authHeaders(),
                     body: JSON.stringify({ game_id: currentGameId })
-                }, 6, 5000);
+                }, 15, 5000);
                 let data = {};
                 try { data = await res.json(); } catch (_) { data = {}; }
                 if (res.ok) {
-                    showToast("🎉 ካርድ ገዝተዋል!", 4000);
+                    showToast("🎉 ካርድ ገዝተዋል!", 'success', 4000);
                     await fetchMe();
                     await fetchMyCard();
                     await fetchGameState();
                 } else {
-                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`), 5000);
+                    showToast("❌ " + (data.detail || `ስህተት (${res.status})`), 'error', 5000);
                 }
             } catch (e) {
-                showToast("❌ ሰርቨሩ ላይሰራ ነው", 5000);
+                showToast("❌ ሰርቨሩ ላይሰራ ነው", 'error', 5000);
             } finally {
                 isBuying = false; updateBuyButton();
                 hideLoadingOverlay();
@@ -868,33 +943,35 @@
         }
 
         async function approveDeposit(id) {
-            if (!confirm('ፍቀድ?')) return;
-            showLoadingOverlay("⏳ በማጽደቅ ላይ...");
-            try {
-                const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/approve/${id}`, 
-                    {method:'POST', headers: authHeaders()}, 6, 5000);
-                let data = {};
-                try { data = await res.json(); } catch (_) { data = {}; }
-                if (res.ok) { 
-                    showToast('✅ ተፈቅዷል'); 
-                    loadDeposits(); 
-                    updateAdminBadge(); 
-                    await fetchMe();
-                } else showToast('❌ ' + (data.detail || 'ስህተት'));
-            } catch (e) { showToast('❌ ሰርቨሩ ላይሰራ ነው'); }
-            finally { hideLoadingOverlay(); }
+            showCustomConfirm('ይህን ክፍያ ፍቀድ?', async () => {
+                showLoadingOverlay("⏳ በማጽደቅ ላይ...");
+                try {
+                    const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/approve/${id}`, 
+                        {method:'POST', headers: authHeaders()}, 15, 5000);
+                    let data = {};
+                    try { data = await res.json(); } catch (_) { data = {}; }
+                    if (res.ok) { 
+                        showToast('✅ ተፈቅዷል', 'success'); 
+                        loadDeposits(); 
+                        updateAdminBadge(); 
+                        await fetchMe();
+                    } else showToast('❌ ' + (data.detail || 'ስህተት'), 'error');
+                } catch (e) { showToast('❌ ሰርቨሩ ላይሰራ ነው', 'error'); }
+                finally { hideLoadingOverlay(); }
+            });
         }
 
         async function rejectDeposit(id) {
-            if (!confirm('ከልክል?')) return;
-            showLoadingOverlay("⏳ በመከልከል ላይ...");
-            try {
-                const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/reject/${id}`, 
-                    {method:'POST', headers: authHeaders()}, 6, 5000);
-                if (res.ok) { showToast('✅ ተከልክሏል'); loadDeposits(); updateAdminBadge(); }
-                else showToast('❌ ስህተት');
-            } catch (e) { showToast('❌ ሰርቨሩ ላይሰራ ነው'); }
-            finally { hideLoadingOverlay(); }
+            showCustomConfirm('ይህን ክፍያ ከልክል?', async () => {
+                showLoadingOverlay("⏳ በመከልከል ላይ...");
+                try {
+                    const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/reject/${id}`, 
+                        {method:'POST', headers: authHeaders()}, 15, 5000);
+                    if (res.ok) { showToast('✅ ተከልክሏል', 'success'); loadDeposits(); updateAdminBadge(); }
+                    else showToast('❌ ስህተት', 'error');
+                } catch (e) { showToast('❌ ሰርቨሩ ላይሰራ ነው', 'error'); }
+                finally { hideLoadingOverlay(); }
+            });
         }
 
         async function loadWithdrawals() {
@@ -930,30 +1007,32 @@
         }
 
         async function approveWithdrawal(wid) {
-            const ref = prompt('የክፍያ ማስረጃ ቁጥር:');
-            if (!ref) return;
-            showLoadingOverlay("⏳ በማጽደቅ ላይ...");
-            try {
-                const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/withdrawal/${wid}/approve`, {
-                    method: 'POST', headers: authHeaders(),
-                    body: JSON.stringify({ reference: ref })
-                }, 6, 5000);
-                if (res.ok) { showToast('✅ ተፈቅዷል'); loadWithdrawals(); }
-                else showToast('❌ ስህተት');
-            } catch (e) { showToast('❌ ሰርቨሩ ላይሰራ ነው'); }
-            finally { hideLoadingOverlay(); }
+            showCustomPrompt('የክፍያ ማስረጃ ቁጥር:', '', async (ref) => {
+                if (!ref) return;
+                showLoadingOverlay("⏳ በማጽደቅ ላይ...");
+                try {
+                    const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/withdrawal/${wid}/approve`, {
+                        method: 'POST', headers: authHeaders(),
+                        body: JSON.stringify({ reference: ref })
+                    }, 15, 5000);
+                    if (res.ok) { showToast('✅ ተፈቅዷል', 'success'); loadWithdrawals(); }
+                    else showToast('❌ ስህተት', 'error');
+                } catch (e) { showToast('❌ ሰርቨሩ ላይሰራ ነው', 'error'); }
+                finally { hideLoadingOverlay(); }
+            });
         }
 
         async function rejectWithdrawal(wid) {
-            if (!confirm('ከልክል? ባላንስ ይመለሳል')) return;
-            showLoadingOverlay("⏳ በመከልከል ላይ...");
-            try {
-                const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/withdrawal/${wid}/reject`, 
-                    {method:'POST', headers: authHeaders()}, 6, 5000);
-                if (res.ok) { showToast('✅ ተከልክሏል'); loadWithdrawals(); }
-                else showToast('❌ ስህተት');
-            } catch (e) { showToast('❌ ሰርቨሩ ላይሰራ ነው'); }
-            finally { hideLoadingOverlay(); }
+            showCustomConfirm('ከልክል? ባላንስ ይመለሳል', async () => {
+                showLoadingOverlay("⏳ በመከልከል ላይ...");
+                try {
+                    const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/withdrawal/${wid}/reject`, 
+                        {method:'POST', headers: authHeaders()}, 15, 5000);
+                    if (res.ok) { showToast('✅ ተከልክሏል', 'success'); loadWithdrawals(); }
+                    else showToast('❌ ስህተት', 'error');
+                } catch (e) { showToast('❌ ሰርቨሩ ላይሰራ ነው', 'error'); }
+                finally { hideLoadingOverlay(); }
+            });
         }
 
         async function loadPlayers() {
@@ -1003,18 +1082,19 @@
             } catch (e) { el.innerHTML = '<p>❌ ስህተት</p>'; }
         }
         async function toggleBan(uid) {
-            if (!confirm('እርግጠኛ?')) return;
-            try {
-                const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/player/${uid}/ban`, 
-                    {method:'POST', headers: authHeaders()}, 6, 5000);
-                if (res.ok) { showToast('✅ ተስተካክሏል'); searchPlayers(); }
-                else showToast('❌ ስህተት');
-            } catch (e) { showToast('❌ ስህተት'); }
+            showCustomConfirm('እርግጠኛ ነዎት?', async () => {
+                try {
+                    const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/player/${uid}/ban`, 
+                        {method:'POST', headers: authHeaders()}, 15, 5000);
+                    if (res.ok) { showToast('✅ ተስተካክሏል', 'success'); searchPlayers(); }
+                    else showToast('❌ ስህተት', 'error');
+                } catch (e) { showToast('❌ ስህተት', 'error'); }
+            });
         }
         async function showPlayerDetail(uid) {
             try {
                 const res = await fetch(`${API_BASE_URL}/api/admin/player/${uid}/full`, { headers: authHeaders() });
-                if (!res.ok) { showToast('❌ ስህተት'); return; }
+                if (!res.ok) { showToast('❌ ስህተት', 'error'); return; }
                 const d = await res.json();
                 alert(`📋 ${d.user.display_name}\n` +
                     `🆔 ${d.user.telegram_id}\n` +
@@ -1022,7 +1102,7 @@
                     `🎮 ${d.stats.total_games} | 🏆 ${d.stats.total_wins}\n` +
                     `💵 ያስገቡ: ${d.stats.total_deposited}\n` +
                     `🎁 ያሸነፉ: ${d.stats.total_won}`);
-            } catch (e) { showToast('❌ ስህተት'); }
+            } catch (e) { showToast('❌ ስህተት', 'error'); }
         }
 
         async function loadAdmins() {
@@ -1048,36 +1128,42 @@
             } catch (e) { el.innerHTML = '<p>❌ ስህተት</p>'; }
         }
         async function createNewAdmin() {
-            const tid = prompt('Telegram ID:'); if (!tid) return;
-            const name = prompt('Display Name:'); if (!name) return;
-            const role = prompt('Role (sub_admin/finance_admin/moderator/viewer):', 'sub_admin');
-            if (!role) return;
-            try {
-                const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/create`, {
-                    method: 'POST', headers: authHeaders(),
-                    body: JSON.stringify({ telegram_id: tid, display_name: name, role })
-                }, 6, 5000);
-                const d = await res.json();
-                if (res.ok) { showToast('✅ Admin ተፈጥሯል'); loadAdmins(); }
-                else showToast('❌ ' + (d.detail || 'ስህተት'));
-            } catch (e) { showToast('❌ ስህተት'); }
+            showCustomPrompt('Telegram ID:', '', (tid) => {
+                if (!tid) return;
+                showCustomPrompt('Display Name:', '', (name) => {
+                    if (!name) return;
+                    showCustomPrompt('Role (sub_admin/finance_admin/moderator/viewer):', 'sub_admin', async (role) => {
+                        if (!role) return;
+                        try {
+                            const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/create`, {
+                                method: 'POST', headers: authHeaders(),
+                                body: JSON.stringify({ telegram_id: tid, display_name: name, role })
+                            }, 15, 5000);
+                            const d = await res.json();
+                            if (res.ok) { showToast('✅ Admin ተፈጥሯል', 'success'); loadAdmins(); }
+                            else showToast('❌ ' + (d.detail || 'ስህተት'), 'error');
+                        } catch (e) { showToast('❌ ስህተት', 'error'); }
+                    });
+                });
+            });
         }
         async function toggleAdmin(id) {
             try {
                 const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/${id}/toggle`, 
-                    {method:'POST', headers: authHeaders()}, 6, 5000);
-                if (res.ok) { showToast('✅ ተስተካክሏል'); loadAdmins(); }
-                else showToast('❌ ስህተት');
-            } catch (e) { showToast('❌ ስህተት'); }
+                    {method:'POST', headers: authHeaders()}, 15, 5000);
+                if (res.ok) { showToast('✅ ተስተካክሏል', 'success'); loadAdmins(); }
+                else showToast('❌ ስህተት', 'error');
+            } catch (e) { showToast('❌ ስህተት', 'error'); }
         }
         async function deleteAdmin(id) {
-            if (!confirm('ሰርዝ?')) return;
-            try {
-                const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/${id}`, 
-                    {method:'DELETE', headers: authHeaders()}, 6, 5000);
-                if (res.ok) { showToast('✅ ተሰርዟል'); loadAdmins(); }
-                else showToast('❌ ስህተት');
-            } catch (e) { showToast('❌ ስህተት'); }
+            showCustomConfirm('ሰርዝ?', async () => {
+                try {
+                    const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/${id}`, 
+                        {method:'DELETE', headers: authHeaders()}, 15, 5000);
+                    if (res.ok) { showToast('✅ ተሰርዟል', 'success'); loadAdmins(); }
+                    else showToast('❌ ስህተት', 'error');
+                } catch (e) { showToast('❌ ስህተት', 'error'); }
+            });
         }
 
         async function loadAudit() {
@@ -1129,13 +1215,14 @@
             showLoadingOverlay("⏳ እየተገናኘ ነው... እባክዎ ጥቂት ይጠብቁ");
             let result = await loadCurrentGame();
             let retries = 0;
-            while (!result.ok && retries < 5) {
+            // ከ5 ወደ 10 ሙከራ አሳድገነዋል
+            while (!result.ok && retries < 10) {
                 await new Promise(r => setTimeout(r, 10000));
                 result = await loadCurrentGame();
                 retries++;
             }
             hideLoadingOverlay();
-            if (!result.ok) showToast("⚠️ ሰርቨሩ ሊነቃ አልቻለም። እባክዎ ቆይተው እንደገና ይሞክሩ።", 7000);
+            if (!result.ok) showToast("⚠️ ሰርቨሩ ሊነቃ አልቻለም። እባክዎ ቆይተው እንደገና ይሞክሩ።", 'error', 7000);
             await fetchMe();
             await fetchMyCard();
             await fetchGameState();
