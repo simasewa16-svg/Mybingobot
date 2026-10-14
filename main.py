@@ -1,10 +1,11 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v8.2 FINAL (DB Stability)
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v8.3 FINAL (DB Stability + Startup Retry)
 =====================================================================
 ✅ አዲስ: DB Error Handler Middleware (503 ይመልሳል → Retry ይሰራል)
 ✅ አዲስ: get_or_create_current_game ላይ Connection Retry
 ✅ አዲስ: InterfaceError ድጋፍ
+✅ አዲስ: startup_event ላይ ዳታቤዙን በትዕግስት የሚጠብቅ ስርዓት (check_db_connection)
 ✅ ሁሉንም ያካትታል (multi-admin, withdrawal, players, fraud)
 =====================================================================
 """
@@ -25,7 +26,7 @@ import time
 import logging
 from datetime import datetime, timedelta, timezone
 
-from database import engine, get_db, Base, SessionLocal
+from database import engine, get_db, Base, SessionLocal, check_db_connection
 from auth import verify_telegram_init_data
 from admin_auth import (
     get_admin_user, has_permission, is_super_admin,
@@ -212,7 +213,7 @@ def lock_game(db, game_id):
     return db.query(models.Game).filter(models.Game.id == game_id).with_for_update().first()
 
 
-def safe_db_execute(db: Session, retries: int = 2):
+def safe_db_execute(db: Session, retries: int = 5):
     """✅ አዲስ: DB ግንኙነትን ማረጋገጥ እና እንደገና መሞከር"""
     for attempt in range(retries):
         try:
@@ -225,7 +226,7 @@ def safe_db_execute(db: Session, retries: int = 2):
             except Exception:
                 pass
             if attempt < retries - 1:
-                time.sleep(1)
+                time.sleep(5) # ከ1 ሰከንድ ወደ 5 ሰከንድ ጨመርነው
             else:
                 return False
     return False
@@ -500,7 +501,7 @@ def health_check():
 @app.get("/api/game/current/state")
 def get_or_create_current_game(db: Session = Depends(get_db)):
     # ✅ አዲስ: የDB ግንኙነት ማረጋገጫ እና እንደገና መሞከር
-    if not safe_db_execute(db, retries=2):
+    if not safe_db_execute(db, retries=5):
         logger.error("Cannot reach database in get_or_create_current_game")
         raise HTTPException(
             status_code=503,
@@ -1634,6 +1635,13 @@ def check_winners(db, game, called_set):
 # =====================================================================
 @app.on_event("startup")
 def startup_event():
+    logger.info("⏳ ሰርቨሩ በመነሳት ላይ ነው... ዳታቤዙን በመጠበቅ ላይ")
+    
+    # ✅ 1. ዳታቤዙ እስኪነቃ ድረስ በትዕግስት መጠበቅ (እስከ 60 ሰከንድ)
+    if not check_db_connection(max_retries=12, delay_seconds=5):
+        logger.error("❌ ዳታቤዙን ማግኘት አልቻልንም! ሰርቨሩ ይዘጋል።")
+        raise RuntimeError("Database not reachable at startup.")
+
     try:
         inspector = inspect(engine)
         existing_tables = set(inspector.get_table_names(schema="public"))
@@ -1659,9 +1667,6 @@ def startup_event():
             Base.metadata.create_all(bind=engine)
             logger.info("✅ create_all completed")
 
-        # Connection test
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
         logger.info("✅ Database connection verified")
 
         # Super Admin
