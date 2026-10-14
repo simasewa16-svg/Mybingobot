@@ -154,6 +154,17 @@
         .hist-amount { font-weight: bold; font-size: 16px; }
         .hist-amount.pos { color: #4caf50; }
         .hist-amount.neg { color: #d32f2f; }
+
+        /* ✅ አዲስ: Settings ስታይሎች */
+        .settings-group { background: #fafafa; border: 2px solid #e0e0e0; border-radius: 12px; padding: 15px; margin-bottom: 12px; text-align: left; }
+        .settings-label { font-size: 13px; color: #333; font-weight: bold; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .settings-label span.range { font-size: 11px; color: #999; font-weight: normal; }
+        .settings-help { font-size: 11px; color: #999; margin-top: 4px; line-height: 1.4; }
+        .settings-input { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; font-weight: bold; color: #6a1b9a; background: white; }
+        .settings-input:focus { outline: none; border-color: #6a1b9a; }
+        .save-settings-btn { background: linear-gradient(135deg, #4caf50, #66bb6a); color: white; border: none; padding: 16px; border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; width: 100%; box-shadow: 0 4px 12px rgba(76,175,80,0.4); margin-top: 10px; }
+        .save-settings-btn:active { transform: scale(0.98); }
+        .save-settings-btn:disabled { background: #bdbdbd; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -254,7 +265,7 @@
         <div class="modal-box">
             <h2>💸 ገንዘብ ማውጣት</h2>
             <p style="font-size:13px;">ዝቅተኛ: 50 ብር | ከፍተኛ: 50,000 ብር</p>
-            <input type="number" id="withdrawAmount" class="input-field" placeholder="መጠን (በብር)">
+            <input type="number" inputmode="numeric" id="withdrawAmount" class="input-field" placeholder="መጠን (በብር)">
             <select id="withdrawMethod" class="input-field">
                 <option value="ቴሌብር">ቴሌብር</option>
                 <option value="ሲቢኢ ብር">ሲቢኢ ብር</option>
@@ -275,6 +286,7 @@
                 <button class="tab-btn" onclick="switchTab(event, 'deposits')">💰 ክፍያዎች</button>
                 <button class="tab-btn" onclick="switchTab(event, 'withdrawals')">💸 ማውጣት</button>
                 <button class="tab-btn" onclick="switchTab(event, 'players')">👥 ተጫዋቾች</button>
+                <button class="tab-btn" onclick="switchTab(event, 'settings')">⚙️ ቅንብሮች</button>
                 <button class="tab-btn" onclick="switchTab(event, 'admins')" id="adminsTabBtn">🛡️ አስተዳዳሪዎች</button>
                 <button class="tab-btn" onclick="switchTab(event, 'audit')">📜 ታሪክ</button>
             </div>
@@ -282,6 +294,7 @@
             <div id="tab-deposits" class="tab-content"></div>
             <div id="tab-withdrawals" class="tab-content"></div>
             <div id="tab-players" class="tab-content"></div>
+            <div id="tab-settings" class="tab-content"></div>
             <div id="tab-admins" class="tab-content"></div>
             <div id="tab-audit" class="tab-content"></div>
             <button class="close-btn" onclick="closeAdminModal()">ዝጋ</button>
@@ -363,12 +376,11 @@
         const MIN_DEPOSIT = 10;
         const GAME_STATE_STALE_MS = 30000;
         
-        // ✅ ADAPTIVE POLLING - በ game status ላይ የተመሰረተ
         const POLL_INTERVALS = {
-            waiting: 10000,    // በመጠበቅ ላይ: 10 ሰከንድ (ዝግ)
-            playing: 3000,     // በሂደት ላይ: 3 ሰከንድ (ፈጣን)
-            finished: 15000,   // ተጠናቋል: 15 ሰከንድ (ዝግ)
-            cancelled: 15000   // ተሰርዟል: 15 ሰከንድ (ዝግ)
+            waiting: 10000,
+            playing: 3000,
+            finished: 15000,
+            cancelled: 15000
         };
         const POLL_MY_CARD_MS = 10000;
         const POLL_CURRENT_GAME_MS = 20000;
@@ -393,6 +405,7 @@
         let boardInitialized = false;
         let connBannerTimer = null;
         let pollTimers = {};
+        let currentSettings = null;  // ✅ አዲስ
 
         function authHeaders() {
             return { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': tg.initData || '' };
@@ -549,7 +562,7 @@
                         lastSuccessfulGameStateFetch = 0;
                         cardError = false;
                         calledNumbersSet.clear();
-                        lastCalledNumber = null;  // ✅ BOARD RESET FIX
+                        lastCalledNumber = null;
                         for (let i = 1; i <= 75; i++) {
                             const cell = document.getElementById(`board-${i}`);
                             if (cell) cell.classList.remove('called', 'latest');
@@ -930,6 +943,7 @@
             else if (tab === 'deposits') loadDeposits();
             else if (tab === 'withdrawals') loadWithdrawals();
             else if (tab === 'players') loadPlayers();
+            else if (tab === 'settings') loadSettings();
             else if (tab === 'admins') loadAdmins();
             else if (tab === 'audit') loadAudit();
         }
@@ -951,6 +965,148 @@
                         <div class="stat-card"><div class="num">${d.money.total_payouts.toFixed(0)}</div><div class="lbl">ሽልማት ብር</div></div>
                     </div>`;
             } catch (e) { el.innerHTML = '<p>❌ ስህተት</p>'; }
+        }
+
+        // ✅ አዲስ: Settings Tab Loader (with permission check)
+        async function loadSettings() {
+            const el = document.getElementById('tab-settings');
+            
+            // ✅ Permission check
+            const hasPerm = isSuperAdmin || (adminInfo && adminInfo.permissions && adminInfo.permissions.includes('control_games'));
+            if (!hasPerm) {
+                el.innerHTML = '<p style="padding:20px; color:#d32f2f; font-weight:bold;">⚠️ ልዩ ፈቃድ ያስፈልጋል (control_games)</p>';
+                return;
+            }
+            
+            el.innerHTML = '<p>በመጫን ላይ...</p>';
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/settings`, { headers: authHeaders() });
+                if (!res.ok) { el.innerHTML = '<p>❌ ፈቃድ የለዎትም</p>'; return; }
+                const data = await res.json();
+                currentSettings = data.settings || {};
+
+                el.innerHTML = `
+                    <div style="text-align: left; margin-bottom: 12px; padding: 12px; background: #e3f2fd; border-radius: 10px; border-left: 4px solid #1976d2;">
+                        <p style="font-size: 12px; color: #1565c0; margin: 0; font-weight: bold;">💡 እነዚህ ቅንብሮች ወዲያውኑ በሁሉም ተጫዋቾች ላይ ይተገበራሉ። ከቀየሩ በኋላ "አስቀምጥ" ን ይጫኑ።</p>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-label">
+                            💵 የካርድ ዋጋ (ብር)
+                            <span class="range">1 - 1000</span>
+                        </div>
+                        <input type="number" inputmode="numeric" id="set-card-price" class="settings-input" value="${currentSettings.card_price || 10}" min="1" max="1000" step="1">
+                        <div class="settings-help">አንድ ተጫዋች ለአንድ ካርድ የሚከፍለው ዋጋ</div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-label">
+                            🎫 ዝቅተኛ ካርድ ቁጥር
+                            <span class="range">2 - 10</span>
+                        </div>
+                        <input type="number" inputmode="numeric" id="set-min-cards" class="settings-input" value="${currentSettings.min_cards_to_start || 2}" min="2" max="10" step="1">
+                        <div class="settings-help">ጨዋታ ለመጀመር የሚያስፈልግ ዝቅተኛ የካርድ ቁጥር</div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-label">
+                            ⏱ የጥሪ ክፍተት (ሰከንድ)
+                            <span class="range">3 - 10</span>
+                        </div>
+                        <input type="number" inputmode="numeric" id="set-draw-interval" class="settings-input" value="${currentSettings.draw_interval_seconds || 5}" min="3" max="10" step="1">
+                        <div class="settings-help">በየስንት ሰከንድ አዲስ ቁጥር እንደሚጠራ</div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-label">
+                            💰 የጃክፖት %
+                            <span class="range">80 - 100</span>
+                        </div>
+                        <input type="number" inputmode="numeric" id="set-jackpot-percent" class="settings-input" value="${currentSettings.jackpot_percent || 100}" min="80" max="100" step="1">
+                        <div class="settings-help">ከጠቅላላ ጃክፖት ስንት በመቶ ለአሸናፊው እንደሚሰጥ</div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-label">
+                            💳 ዝቅተኛ Deposit (ብር)
+                            <span class="range">1 - 1000</span>
+                        </div>
+                        <input type="number" inputmode="numeric" id="set-min-deposit" class="settings-input" value="${currentSettings.min_deposit || 10}" min="1" max="1000" step="1">
+                        <div class="settings-help">ተጫዋቾች ማስገባት የሚችሉት ዝቅተኛ መጠን</div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-label">
+                            💸 ዝቅተኛ Withdrawal (ብር)
+                            <span class="range">10 - 10,000</span>
+                        </div>
+                        <input type="number" inputmode="numeric" id="set-min-withdrawal" class="settings-input" value="${currentSettings.min_withdrawal || 50}" min="10" max="10000" step="1">
+                        <div class="settings-help">ተጫዋቾች ማውጣት የሚችሉት ዝቅተኛ መጠን</div>
+                    </div>
+
+                    <button class="save-settings-btn" id="save-settings-btn" onclick="saveSettings()">💾 አስቀምጥ</button>
+                `;
+            } catch (e) {
+                console.error('loadSettings error:', e);
+                el.innerHTML = '<p style="color:#d32f2f;">❌ ስህተት ተፈጥሯል</p>';
+            }
+        }
+
+        // ✅ አዲስ: Save Settings (with auto-refresh)
+        async function saveSettings() {
+            const btn = document.getElementById('save-settings-btn');
+            if (btn) { btn.disabled = true; btn.innerText = '⏳ በማስቀመጥ ላይ...'; }
+
+            const payload = {
+                card_price: parseFloat(document.getElementById('set-card-price').value),
+                min_cards_to_start: parseInt(document.getElementById('set-min-cards').value),
+                draw_interval_seconds: parseInt(document.getElementById('set-draw-interval').value),
+                jackpot_percent: parseInt(document.getElementById('set-jackpot-percent').value),
+                min_deposit: parseInt(document.getElementById('set-min-deposit').value),
+                min_withdrawal: parseInt(document.getElementById('set-min-withdrawal').value)
+            };
+
+            // Client-side validation
+            if (payload.card_price < 1 || payload.card_price > 1000) {
+                showToast('❌ የካርድ ዋጋ ከ1 እስከ 1000 ብር መሆን አለበት', 'error');
+                if (btn) { btn.disabled = false; btn.innerText = '💾 አስቀምጥ'; }
+                return;
+            }
+            if (payload.min_cards_to_start < 2 || payload.min_cards_to_start > 10) {
+                showToast('❌ ዝቅተኛ ካርድ ቁጥር ከ2 እስከ 10 መሆን አለበት', 'error');
+                if (btn) { btn.disabled = false; btn.innerText = '💾 አስቀምጥ'; }
+                return;
+            }
+            if (payload.draw_interval_seconds < 3 || payload.draw_interval_seconds > 10) {
+                showToast('❌ የጥሪ ክፍተት ከ3 እስከ 10 ሰከንድ መሆን አለበት', 'error');
+                if (btn) { btn.disabled = false; btn.innerText = '💾 አስቀምጥ'; }
+                return;
+            }
+
+            try {
+                const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/settings`, {
+                    method: 'PUT', headers: authHeaders(),
+                    body: JSON.stringify(payload)
+                }, 15, 5000);
+                let data = {};
+                try { data = await res.json(); } catch (_) { data = {}; }
+                if (res.ok) {
+                    showToast('✅ ቅንብሮች በተሳካ ሁኔታ ተቀይረዋል', 'success', 5000);
+                    currentSettings = { ...currentSettings, ...payload };
+                    
+                    // ✅ Auto-refresh: ጨዋታ ላይ ወዲያውኑ እንዲታይ
+                    await loadCurrentGame();
+                    if (currentGameId) {
+                        await fetchGameState();
+                    }
+                } else {
+                    showToast('❌ ' + (data.detail || 'ስህተት ተፈጥሯል'), 'error', 5000);
+                }
+            } catch (e) {
+                showToast('❌ ሰርቨሩ ላይሰራ ነው', 'error', 5000);
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerText = '💾 አስቀምጥ'; }
+            }
         }
 
         async function loadDeposits() {
@@ -1231,13 +1387,11 @@
 
         function shouldPoll() { return document.visibilityState === 'visible'; }
 
-        // ✅ MEMORY CLEANUP - Stop all polling timers
         function stopPolling() {
             Object.values(pollTimers).forEach(t => clearTimeout(t));
             pollTimers = {};
         }
 
-        // ✅ ADAPTIVE POLLING - Different intervals based on status
         async function pollGameState() {
             if (shouldPoll()) await fetchGameState();
             const interval = POLL_INTERVALS[currentGameStatus] || 5000;
@@ -1260,7 +1414,6 @@
             pollTimers.adminBadge = setTimeout(pollAdminBadge, POLL_ME_MS);
         }
 
-        // ✅ RECONNECT on visibility change
         document.addEventListener('visibilitychange', async () => {
             if (document.visibilityState === 'visible') {
                 await fetchGameState();
@@ -1268,7 +1421,6 @@
             }
         });
 
-        // ✅ CLEANUP on page unload
         window.addEventListener('beforeunload', stopPolling);
 
         window.onload = async function() {
