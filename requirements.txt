@@ -1,8 +1,8 @@
 fastapi
-uvicorn[standard]
+uvicorn
 sqlalchemy
-psycopg[binary]
+psycopg2-binary
 pyTelegramBotAPI
-python-dotenv
 pydantic
 alembic
+python-dotenv
