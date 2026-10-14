@@ -1,13 +1,14 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v8.5 FINAL (Bug Fixes & Activity)
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v8.8 FINAL PRODUCTION
 =====================================================================
-✅ አዲስ: startup_event ላይ ዳታቤዙን አይጠብቅም (Render 50s timeout ለማስቀረት)
-✅ አዲስ: safe_db_execute ወደ 15 ሙከራ ከፍ ብሏል (እስከ 60 ሰከንድ ይጠብቃል)
-✅ አዲስ: admin_adjustment ላይ UUID በመጠቀም Unique Constraint ስህተት ተስተካክሏል
-✅ አዲስ: User.last_active በget_current_user ውስጥ ይዘመናል
-✅ DB Error Handler Middleware (503 ይመልሳል → Retry ይሰራል)
-✅ get_or_create_current_game ላይ Connection Retry
+✅ Dynamic Port (Render $PORT ይከተላል)
+✅ Mini App Button (/start ላይ)
+✅ Bot Auto-Restart Loop
+✅ Startup Retry Logic
+✅ DB Error Handler Middleware
+✅ UUID Fix for admin_adjustment
+✅ User.last_active update
 =====================================================================
 """
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
@@ -20,9 +21,10 @@ from pydantic import BaseModel, Field
 from decimal import Decimal, ROUND_DOWN
 from typing import Literal, List, Optional
 import os
-import uuid  # ✅ አዲስ የተጨመረ ለUnique ID
+import uuid
 import secrets
 import telebot
+from telebot import types
 import threading
 import time
 import logging
@@ -72,7 +74,6 @@ app.add_middleware(
 # =====================================================================
 @app.middleware("http")
 async def db_error_handler(request: Request, call_next):
-    """የDB ስህተቶችን ወደ 503 ይቀይራል (Retry እንዲሰራ)"""
     try:
         response = await call_next(request)
         return response
@@ -94,6 +95,7 @@ async def db_error_handler(request: Request, call_next):
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 SUPER_ADMIN_ID = os.getenv("ADMIN_ID", "")
 SUPER_ADMIN_USERNAME = os.getenv("SUPER_ADMIN_USERNAME", "Super Admin")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://mybingobot-1.onrender.com")
 
 # =====================================================================
 # ✅ ቋሚ እሴቶች
@@ -131,49 +133,70 @@ bot = telebot.TeleBot(BOT_TOKEN) if BOT_TOKEN else None
 if bot:
     @bot.message_handler(commands=['start'])
     def send_welcome(message):
-        bot.reply_to(message, "ሰላም! የቢንጎ ጨዋታ ቦት እንኳን ደህና መጣህ/ሽ!")
+        try:
+            markup = types.InlineKeyboardMarkup()
+            web_app = types.WebAppInfo(url=WEBAPP_URL)
+            btn = types.InlineKeyboardButton("🎮 ጨዋታውን ክፈት", web_app=web_app)
+            markup.add(btn)
+            bot.reply_to(
+                message,
+                "ሰላም! የቢንጎ ጨዋታ ቦት እንኳን ደህና መጣህ/ሽ! 🎉\n\n"
+                "ጨዋታውን ለመጀመር ከታች ያለውን ቁልፍ ተጭነው/ቺው።",
+                reply_markup=markup
+            )
+        except Exception as e:
+            logger.error(f"send_welcome error: {e}")
+            bot.reply_to(message, "ሰላም! እባክዎ እንደገና ይሞክሩ።")
 
 
 def run_bot():
     if not bot or not BOT_POLLING_ENABLED:
+        logger.warning("⚠️ Bot not started: BOT_TOKEN or POLLING_ENABLED is false")
         return
-    dedicated_conn = None
-    got_lock = False
-    try:
-        dedicated_conn = engine.raw_connection()
-        cursor = dedicated_conn.cursor()
-        cursor.execute("SELECT pg_try_advisory_lock(%s)", (BOT_POLLING_LOCK_ID,))
-        got_lock = cursor.fetchone()[0]
-        cursor.close()
-        if not got_lock:
-            logger.info("ℹ️ Bot polling skipped (lock held)")
-            return
-        logger.info("✅ Bot polling started")
-        bot.polling(non_stop=True, timeout=30)
-    except Exception as e:
-        logger.error(f"Bot polling error: {e}")
-    finally:
-        if dedicated_conn:
-            try:
-                if got_lock:
-                    cursor = dedicated_conn.cursor()
-                    cursor.execute("SELECT pg_advisory_unlock(%s)", (BOT_POLLING_LOCK_ID,))
-                    dedicated_conn.commit()
-                    cursor.close()
-            except Exception as e:
-                logger.error(f"Bot unlock error: {e}")
-            finally:
+    
+    while True:
+        dedicated_conn = None
+        got_lock = False
+        try:
+            dedicated_conn = engine.raw_connection()
+            cursor = dedicated_conn.cursor()
+            cursor.execute("SELECT pg_try_advisory_lock(%s)", (BOT_POLLING_LOCK_ID,))
+            got_lock = cursor.fetchone()[0]
+            cursor.close()
+            
+            if not got_lock:
+                logger.info("ℹ️ Bot polling skipped (lock held), retrying in 30s...")
+                time.sleep(30)
+                continue
+            
+            logger.info("✅ Bot polling started")
+            bot.polling(non_stop=True, timeout=30)
+            
+        except Exception as e:
+            logger.error(f"❌ Bot polling error: {e}")
+            time.sleep(10)
+        finally:
+            if dedicated_conn:
                 try:
-                    dedicated_conn.close()
-                except Exception:
-                    pass
+                    if got_lock:
+                        cursor = dedicated_conn.cursor()
+                        cursor.execute("SELECT pg_advisory_unlock(%s)", (BOT_POLLING_LOCK_ID,))
+                        dedicated_conn.commit()
+                        cursor.close()
+                except Exception as e:
+                    logger.error(f"Bot unlock error: {e}")
+                finally:
+                    try:
+                        dedicated_conn.close()
+                    except Exception:
+                        pass
+            time.sleep(5)
 
 
 # =====================================================================
 # ✅ Helper ተግባሮች
 # =====================================================================
 def ensure_super_admin_exists(db: Session):
-    """Super Admin መኖሩን ማረጋገጥ"""
     if not SUPER_ADMIN_ID:
         return None
     admin = db.query(models.AdminUser).filter(
@@ -216,9 +239,6 @@ def lock_game(db, game_id):
 
 
 def safe_db_execute(db: Session, retries: int = 20):
-    """
-    ✅ DB ግንኙነትን ማረጋገጥ እና እንደገና መሞከር (እስከ 100 ሰከንድ)
-    """
     for attempt in range(retries):
         try:
             db.execute(text("SELECT 1"))
@@ -230,7 +250,7 @@ def safe_db_execute(db: Session, retries: int = 20):
             except Exception:
                 pass
             if attempt < retries - 1:
-                time.sleep(5)  # በየ5 ሰከንዱ ይሞክራል
+                time.sleep(5)
             else:
                 return False
     return False
@@ -340,7 +360,6 @@ async def get_current_user(
     if user.is_banned:
         raise HTTPException(status_code=403, detail="አካውንትዎ ታግዷል")
     
-    # ✅ አዲስ: የተጠቃሚውን የመጨረሻ እንቅስቃሴ ማዘመን
     try:
         user.last_active = datetime.now(timezone.utc)
         db.commit()
@@ -486,7 +505,11 @@ def _cancel_game_with_refund(db, game_id: int):
 # =====================================================================
 @app.get("/")
 def read_root():
-    return FileResponse("templates/index.html")
+    try:
+        return FileResponse("templates/index.html")
+    except Exception as e:
+        logger.error(f"Template not found: {e}")
+        return JSONResponse(status_code=404, content={"detail": "Page not found"})
 
 
 @app.get("/api/status")
@@ -512,7 +535,6 @@ def health_check():
 # =====================================================================
 @app.get("/api/game/current/state")
 def get_or_create_current_game(db: Session = Depends(get_db)):
-    # ✅ የDB ግንኙነት ማረጋገጫ እና እንደገና መሞከር (እስከ 60 ሰከንድ ይጠብቃል)
     if not safe_db_execute(db, retries=15):
         logger.error("Cannot reach database in get_or_create_current_game")
         raise HTTPException(
@@ -1177,11 +1199,10 @@ def adjust_balance_v2(user_id: int, req: AdjustBalanceRequest,
     if new_balance < 0:
         raise HTTPException(status_code=400, detail="ባላንስ ከዜሮ በታች መሆን አይችልም")
     user.balance = new_balance
-    # ✅ አዲስ: ልዩ የሆነ reference_id በመጠቀም Unique Constraint ስህተትን መከላከል
     db.add(models.LedgerEntry(
         user_id=user.id, entry_type="admin_adjustment",
         amount=req.amount, balance_after=new_balance,
-        reference_type="admin", 
+        reference_type="admin",
         reference_id=f"{admin.telegram_id}_{uuid.uuid4().hex[:8]}",
         notes=f"[{admin.display_name}] {req.reason}"
     ))
@@ -1645,15 +1666,11 @@ def check_winners(db, game, called_set):
 
 
 # =====================================================================
-# ✅ STARTUP (ዳታቤዙን አይጠብቅም)
+# ✅ STARTUP
 # =====================================================================
 @app.on_event("startup")
 def startup_event():
     logger.info("⏳ ሰርቨሩ በመነሳት ላይ ነው...")
-    
-    # ❌ ዳታቤዙን እዚህ መጠበቅ ተቀርቷል (Render 50s timeout ስለሚፈጥር)
-    # ሰርቨሩ ወዲያውኑ እንዲነሳ ተደርጓል። ዳታቤዙን የመጠበቅ ስራው
-    # በ `safe_db_execute` በኩል ተጠቃሚው ጥያቄ ሲልክ ይሰራል።
 
     if bot:
         threading.Thread(target=run_bot, daemon=True).start()
@@ -1664,6 +1681,11 @@ def startup_event():
     logger.info("✅ Bingo backend started successfully.")
 
 
+# =====================================================================
+# ✅ Dynamic Port (Render $PORT)
+# =====================================================================
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    logger.info(f"🚀 Starting server on port {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
