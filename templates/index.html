@@ -217,6 +217,22 @@
             clearTimeout(toastTimer);
             toastTimer = setTimeout(() => t.classList.remove('show'), duration);
         }
+        
+        // ✅ አዲስ የተጨመረ፡ የዳታቤዝ ግንኙነት ሲቋረጥ እንደገና ለመሞከር የሚረዳ ተግባር
+        async function fetchWithRetry(url, options = {}, retries = 3, delay = 3000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const res = await fetch(url, options);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res;
+                } catch (err) {
+                    if (i === retries - 1) throw err;
+                    console.warn(`Fetch failed, retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
+                    await new Promise(r => setTimeout(r, delay));
+                }
+            }
+        }
+
         function setStatusBadge(status) {
             const badge = document.getElementById('game-status-badge');
             badge.className = 'status-badge';
@@ -292,8 +308,8 @@
             const promise = (async () => {
                 const reqId = ++loadGameRequestId;
                 try {
-                    const res = await fetch(`${API_BASE_URL}/api/game/current/state`);
-                    if (!res.ok) throw new Error("HTTP " + res.status);
+                    // ✅ የተስተካከለ፡ fetchWithRetry መጠቀም
+                    const res = await fetchWithRetry(`${API_BASE_URL}/api/game/current/state`);
                     const data = await res.json();
                     if (reqId !== loadGameRequestId) return { ok: true, hasGame: false, stale: true };
                     if (data.id) {
@@ -304,7 +320,6 @@
                             lastCalledNumber = null;
                             lastSuccessfulGameStateFetch = 0;
                             cardError = false;
-                            // ✅ የቆዩ promise አጽዳ
                             myCardPromise = null;
                             myCardPromiseGameId = null;
                             gameStatePromise = null;
@@ -334,7 +349,9 @@
                 } catch (e) {
                     console.error("loadCurrentGame:", e);
                     lastSuccessfulGameStateFetch = 0;
-                    showGameError("የኢንተርኔት ስህተት — ጨዋታ ማምጣት አልተቻለም");
+                    // ✅ ሰርቨሩ ሲነቃ የሚታይ መልእክት
+                    document.getElementById('status-message').innerText = '⏳ ሰርቨሩ በመነሳት ላይ ነው... እባክዎ ይጠብቁ (ለ1 ደቂቃ ያህል)';
+                    setStatusBadge('waiting');
                     return { ok: false };
                 }
             })();
@@ -444,8 +461,7 @@
             const myToken = ++gameStateApplyToken;
             const promise = (async () => {
                 try {
-                    const res = await fetch(`${API_BASE_URL}/api/game/${requestedGameId}`);
-                    if (!res.ok) return;
+                    const res = await fetchWithRetry(`${API_BASE_URL}/api/game/${requestedGameId}`);
                     const data = await res.json();
 
                     if (requestedGameId !== currentGameId) return;
@@ -808,8 +824,18 @@
         }
 
         window.onload = async function() {
-            const result = await loadCurrentGame();
-            if (!result.ok) showToast("⚠️ ጨዋታ ማምጣት አልተቻለም፣ እንደገና ይሞክሩ");
+            // ✅ የመጀመሪያ ጭነት (Initial Load) - ሰርቨሩ እስኪነቃ ድረስ ይጠብቃል
+            let result = await loadCurrentGame();
+            let retries = 0;
+            while (!result.ok && retries < 5) {
+                console.log(`Waiting for server to wake up... Attempt ${retries + 1}`);
+                await new Promise(r => setTimeout(r, 10000)); // 10 ሰከንድ ይጠብቃል
+                result = await loadCurrentGame();
+                retries++;
+            }
+            
+            if (!result.ok) showToast("⚠️ ሰርቨሩ ሊነቃ አልቻለም። እባክዎ ቆይተው እንደገና ይሞክሩ።");
+            
             await fetchMe();
             await fetchMyCard();
             await fetchGameState();
