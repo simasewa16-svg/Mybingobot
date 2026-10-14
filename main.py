@@ -1,6 +1,6 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v8.8 FINAL PRODUCTION
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v9.1 FINAL PRODUCTION
 =====================================================================
 ✅ Dynamic Port (Render $PORT ይከተላል)
 ✅ Mini App Button (/start ላይ)
@@ -9,6 +9,10 @@
 ✅ DB Error Handler Middleware
 ✅ UUID Fix for admin_adjustment
 ✅ User.last_active update
+✅ Feedback endpoint (rate limited + Telegram)
+✅ Memory cleanup thread (rate limit cache)
+✅ Markdown escape with SAFE FALLBACK
+✅ Full message support (up to 3800 chars)
 =====================================================================
 """
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
@@ -25,9 +29,22 @@ import uuid
 import secrets
 import telebot
 from telebot import types
+
+# ✅ Safe escape_markdown import (with fallback for older telebot versions)
+try:
+    from telebot.formatting import escape_markdown
+except ImportError:
+    def escape_markdown(text: str) -> str:
+        """Fallback: escape Markdown special chars"""
+        if not isinstance(text, str):
+            text = str(text)
+        escape_chars = r'\_*[]()~`>#+-=|{}.!'
+        return ''.join('\\' + c if c in escape_chars else c for c in text)
+
 import threading
 import time
 import logging
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from database import engine, get_db, Base, SessionLocal
@@ -43,6 +60,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 secure_random = secrets.SystemRandom()
+
+# ✅ Feedback Rate Limiting (1 per 60 seconds per user)
+_feedback_rate_limit = defaultdict(list)
 
 app = FastAPI(title="Bingo Game API")
 
@@ -96,6 +116,13 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 SUPER_ADMIN_ID = os.getenv("ADMIN_ID", "")
 SUPER_ADMIN_USERNAME = os.getenv("SUPER_ADMIN_USERNAME", "Super Admin")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://mybingobot-1.onrender.com")
+
+# ✅ Parse SUPER_ADMIN_ID as integer for Telegram
+try:
+    SUPER_ADMIN_CHAT_ID = int(SUPER_ADMIN_ID) if SUPER_ADMIN_ID else None
+except (ValueError, TypeError):
+    SUPER_ADMIN_CHAT_ID = None
+    logger.error(f"⚠️ SUPER_ADMIN_ID is not a valid integer: {SUPER_ADMIN_ID}")
 
 # =====================================================================
 # ✅ ቋሚ እሴቶች
@@ -191,6 +218,25 @@ def run_bot():
                     except Exception:
                         pass
             time.sleep(5)
+
+
+def cleanup_feedback_limits():
+    """✅ Periodic cleanup of stale rate limit entries"""
+    while True:
+        try:
+            time.sleep(3600)  # 1 hour
+            now = time.time()
+            dead_users = []
+            for user_id, timestamps in list(_feedback_rate_limit.items()):
+                timestamps[:] = [t for t in timestamps if now - t < 60]
+                if not timestamps:
+                    dead_users.append(user_id)
+            for user_id in dead_users:
+                del _feedback_rate_limit[user_id]
+            if dead_users:
+                logger.info(f"🧹 Cleaned {len(dead_users)} stale rate limit entries")
+        except Exception as e:
+            logger.error(f"Cleanup error: {e}")
 
 
 # =====================================================================
@@ -428,6 +474,11 @@ class AdjustBalanceRequest(BaseModel):
 class AddPlayerNoteRequest(BaseModel):
     note: str = Field(..., min_length=1, max_length=1000)
     is_warning: bool = False
+
+
+class FeedbackRequest(BaseModel):
+    message: str = Field(..., min_length=3, max_length=1000)
+    category: Literal["አስተያየት", "ችግር", "ጥያቄ", "ሀሳብ"] = "አስተያየት"
 
 
 # =====================================================================
@@ -796,6 +847,64 @@ def get_history(user: models.User = Depends(get_current_user),
     except Exception as e:
         logger.error(f"History error: {e}")
         raise HTTPException(status_code=500, detail="ታሪክ ማምጣት አልተቻለም")
+
+
+# =====================================================================
+# ✅ FEEDBACK ENDPOINT
+# =====================================================================
+@app.post("/api/feedback")
+def submit_feedback(req: FeedbackRequest,
+                    user: models.User = Depends(get_current_user)):
+    """የተጠቃሚ አስተያየት ወደ Super Admin ይላካል (rate limited: 1/min)"""
+    
+    # ✅ Rate Limiting: 1 feedback per 60 seconds per user
+    now = time.time()
+    user_limits = _feedback_rate_limit[user.id]
+    user_limits[:] = [t for t in user_limits if now - t < 60]
+    if len(user_limits) >= 1:
+        raise HTTPException(
+            status_code=429,
+            detail="ውድ ደንበኛችን! እባክዎ 1 ደቂቃ ጠብቀው እንደገና ይሞክሩ።"
+        )
+    user_limits.append(now)
+    
+    try:
+        if bot and SUPER_ADMIN_CHAT_ID:
+            max_msg = 3800
+            if len(req.message) <= max_msg:
+                msg_display = req.message
+                truncated_note = ""
+            else:
+                msg_display = req.message[:max_msg]
+                truncated_note = f"\n\n⚠️ _[ሙሉው መልእክት {len(req.message)} ፊደላት ነበር፣ {max_msg} ብቻ ታይቷል]_"
+            
+            safe_name = escape_markdown(user.first_name or 'ያልታወቀ')
+            safe_username = escape_markdown(user.username or 'N/A')
+            safe_message = escape_markdown(msg_display)
+            
+            text = f"📬 *አዲስ አስተያየት*\n\n"
+            text += f"👤 *ከ:* {safe_name} (@{safe_username})\n"
+            text += f"🆔 `{user.telegram_id}`\n"
+            text += f"📂 *ምድብ:* {req.category}\n"
+            text += f"📏 *ርዝመት:* {len(req.message)} ፊደላት\n\n"
+            text += f"💬 *መልእክት:*\n{safe_message}{truncated_note}"
+            
+            try:
+                bot.send_message(SUPER_ADMIN_CHAT_ID, text, parse_mode="Markdown")
+            except Exception as tg_err:
+                logger.warning(f"Markdown failed, trying plain: {tg_err}")
+                try:
+                    plain_text = text.replace("*", "").replace("`", "").replace("_", "")
+                    bot.send_message(SUPER_ADMIN_CHAT_ID, plain_text)
+                except Exception as tg_err2:
+                    logger.error(f"Telegram send error: {tg_err2}")
+                    
+        return {"message": "አስተያየትዎ ደርሶናል! እናመሰግናለን።"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Feedback error: {e}")
+        raise HTTPException(status_code=500, detail="አስተያየት መላክ አልተቻለም")
 
 
 # =====================================================================
@@ -1678,6 +1787,11 @@ def startup_event():
 
     threading.Thread(target=bingo_engine_loop, daemon=True).start()
     logger.info("✅ Bingo engine started.")
+
+    # ✅ Feedback rate limit cleanup
+    threading.Thread(target=cleanup_feedback_limits, daemon=True).start()
+    logger.info("✅ Feedback cleanup thread started")
+
     logger.info("✅ Bingo backend started successfully.")
 
 
