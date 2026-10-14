@@ -1,9 +1,23 @@
-fastapi
-uvicorn
-sqlalchemy
-psycopg2-binary
-psycopg[binary]
-pyTelegramBotAPI
-pydantic
-alembic
-python-dotenv
+# =====================================================================
+# ✅ የBingo ጨዋታ ስርዓት — Python Dependencies (v8.1)
+# =====================================================================
+# Python 3.11+ ይመከራል
+# =====================================================================
+
+# ✅ Web Framework
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+
+# ✅ Database
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+alembic==1.13.3
+
+# ✅ Telegram Bot
+pyTelegramBotAPI==4.23.0
+
+# ✅ Data Validation
+pydantic==2.9.2
+
+# ✅ Environment
+python-dotenv==1.0.1
