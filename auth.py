@@ -52,7 +52,6 @@ def verify_telegram_init_data(init_data: str, bot_token: str):
         parsed = parse_qs(init_data, keep_blank_values=True)
 
         # ✅ የተደጋገሙ query keys ውድቅ አድርግ
-        # parse_qs ተመሳሳይ key ብዙ ጊዜ ሲመጣ ብዙ values ይመልሳል
         if any(len(values) != 1 for values in parsed.values()):
             logger.warning("Duplicate init_data parameters detected")
             return None
@@ -65,7 +64,6 @@ def verify_telegram_init_data(init_data: str, bot_token: str):
         received_hash = parsed.pop('hash')[0]
 
         # ✅ የ hash ቅርጽ ማረጋገጫ — 64 hex characters
-        # ርዝመት ብቻ ሳይሆን ሁሉም ቁምፊዎች hex መሆናቸውን ማረጋገጥ
         if (
             len(received_hash) != 64
             or any(c not in HEX_CHARS for c in received_hash)
