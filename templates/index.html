@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ሃ ቡንላ ከድራ!</title>
+    <title>🇪🇹 ኢትዮጵያዬ</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -94,7 +94,7 @@
         .toast.success { background: #2e7d32; border-left-color: #81c784; }
         .toast.error { background: #c62828; border-left-color: #ef5350; }
         
-        /* ✅ አዲስ የሙሉ ስክሪን Loading Overlay (ነጭ ዳራ፣ ጥቁር ፅሁፍ) */
+        /* ✅ አዲስ የሙሉ ስክሪን Loading Overlay (ነጭ ዳራ) */
         .loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(255, 255, 255, 0.95);
@@ -102,14 +102,28 @@
             z-index: 10000; padding: 20px; text-align: center;
         }
         .loading-overlay.show { display: flex; }
-        .spinner-large {
-            width: 70px; height: 70px;
-            border: 8px solid rgba(106,27,154,0.1);
-            border-radius: 50%;
-            border-top-color: #6a1b9a;
-            animation: spin 1s linear infinite;
+        
+        /* ✅ አዲስ የሚሽከረከረው ክብ እና በመሃሉ ያለው ባንዲራ */
+        .spinner-container {
+            position: relative;
+            width: 80px; height: 80px;
+            display: flex; align-items: center; justify-content: center;
             margin-bottom: 25px;
         }
+        .spinner-ring {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            border: 6px solid #078930; /* አረንጓዴ */
+            border-top-color: #FCDD09; /* ቢጫ */
+            border-right-color: #DA121A; /* ቀይ */
+            border-radius: 50%;
+            animation: spin 1.5s linear infinite;
+        }
+        .flag-icon {
+            font-size: 40px;
+            line-height: 1;
+            z-index: 2;
+        }
+        
         .loading-text {
             color: #333; font-size: 20px; font-weight: bold;
             line-height: 1.6; max-width: 85%;
@@ -173,15 +187,18 @@
         <p>ይህ ገጽ በቴሌግራም ውስጥ ብቻ ይሰራል።<br>እባክህ/ሽ በቴሌግራም ቦት በኩል ክፈተው/ተው።</p>
     </div>
 
-    <!-- ✅ አዲስ የሙሉ ስክሪን Loading Overlay -->
+    <!-- ✅ አዲስ የሙሉ ስክሪን Loading Overlay (ባንዲራ ያለው) -->
     <div class="loading-overlay" id="loadingOverlay">
-        <div class="spinner-large"></div>
-        <div class="loading-text" id="loadingText">⏳ እባክዎ ጥቂት ይጠብቁ...</div>
+        <div class="spinner-container">
+            <div class="spinner-ring"></div>
+            <div class="flag-icon">🇪🇹</div>
+        </div>
+        <div class="loading-text" id="loadingText">⏳ Please wait...</div>
     </div>
 
     <div class="app-container">
         <div class="top-header">
-            <h1>🎰 ሃ ቡንላ ከድራ!</h1>
+            <h1>🇪🇹 ኢትዮጵያዬ</h1>
             <div class="balance-bar">
                 <span>💰 ባላንስ: <b id="user-balance">0 ብር</b></span>
                 <div>
@@ -397,7 +414,7 @@
         }
 
         // ✅ አዲስ የLoading Overlay ማሳያ እና ማጥፊያ
-        function showLoadingOverlay(msg = "⏳ እባክዎ ጥቂት ይጠብቁ...") {
+        function showLoadingOverlay(msg = "⏳ Please wait...") {
             document.getElementById('loadingText').innerText = msg;
             document.getElementById('loadingOverlay').classList.add('show');
         }
@@ -463,7 +480,7 @@
                         lastError = new Error(`Server waking up (${res.status})`);
                         if (attempt < maxAttempts) {
                             // ደንበኛው ቴክኒካዊ መረጃ እንዳያይ ቀላል መልእክት ብቻ እናሳያለን
-                            showLoadingOverlay("⏳ እባክዎ ጥቂት ይጠብቁ...\nሰርቨሩ በመነሳት ላይ ነው።");
+                            showLoadingOverlay("⏳ Please wait...\nServer is starting up.");
                             await new Promise(r => setTimeout(r, delayMs));
                             continue;
                         }
@@ -477,7 +494,7 @@
                         lastError = new Error('Timeout');
                     }
                     if (attempt < maxAttempts) {
-                        showLoadingOverlay("⏳ እባክዎ ጥቂት ይጠብቁ...");
+                        showLoadingOverlay("⏳ Please wait...");
                         await new Promise(r => setTimeout(r, delayMs));
                         continue;
                     }
@@ -729,7 +746,7 @@
                 showCustomPrompt("የደረሰኙ ቁጥር:", "", async (reference) => {
                     if (!reference || reference.trim() === '') return;
                     closeDepositModal();
-                    showLoadingOverlay("⏳ ጥያቄዎን በመላክ ላይ...");
+                    showLoadingOverlay("⏳ Sending request...");
                     try {
                         const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/deposit`, {
                             method: 'POST', headers: authHeaders(),
@@ -758,7 +775,7 @@
             const currentBal = parseFloat(document.getElementById('user-balance').innerText) || 0;
             if (currentBal < amount) { showToast("❌ በቂ ባላንስ የለዎትም", 'error'); return; }
             
-            showLoadingOverlay("⏳ ጥያቄዎን በመላክ ላይ...");
+            showLoadingOverlay("⏳ Sending request...");
             try {
                 const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/withdrawal`, {
                     method: 'POST', headers: authHeaders(),
@@ -786,7 +803,7 @@
             }
             if (!isGameTrusted()) { showToast("⏳ በመገናኘት ላይ", 'info'); return; }
             isBuying = true; updateBuyButton();
-            showLoadingOverlay("⏳ ካርድ በመግዛት ላይ...");
+            showLoadingOverlay("⏳ Buying card...");
             try {
                 const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/buy_card`, {
                     method: 'POST', headers: authHeaders(),
@@ -944,7 +961,7 @@
 
         async function approveDeposit(id) {
             showCustomConfirm('ይህን ክፍያ ፍቀድ?', async () => {
-                showLoadingOverlay("⏳ በማጽደቅ ላይ...");
+                showLoadingOverlay("⏳ Approving...");
                 try {
                     const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/approve/${id}`, 
                         {method:'POST', headers: authHeaders()}, 15, 5000);
@@ -963,7 +980,7 @@
 
         async function rejectDeposit(id) {
             showCustomConfirm('ይህን ክፍያ ከልክል?', async () => {
-                showLoadingOverlay("⏳ በመከልከል ላይ...");
+                showLoadingOverlay("⏳ Rejecting...");
                 try {
                     const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/reject/${id}`, 
                         {method:'POST', headers: authHeaders()}, 15, 5000);
@@ -1009,7 +1026,7 @@
         async function approveWithdrawal(wid) {
             showCustomPrompt('የክፍያ ማስረጃ ቁጥር:', '', async (ref) => {
                 if (!ref) return;
-                showLoadingOverlay("⏳ በማጽደቅ ላይ...");
+                showLoadingOverlay("⏳ Approving...");
                 try {
                     const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/withdrawal/${wid}/approve`, {
                         method: 'POST', headers: authHeaders(),
@@ -1024,7 +1041,7 @@
 
         async function rejectWithdrawal(wid) {
             showCustomConfirm('ከልክል? ባላንስ ይመለሳል', async () => {
-                showLoadingOverlay("⏳ በመከልከል ላይ...");
+                showLoadingOverlay("⏳ Rejecting...");
                 try {
                     const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/admin/withdrawal/${wid}/reject`, 
                         {method:'POST', headers: authHeaders()}, 15, 5000);
@@ -1212,7 +1229,7 @@
         }
 
         window.onload = async function() {
-            showLoadingOverlay("⏳ እየተገናኘ ነው... እባክዎ ጥቂት ይጠብቁ");
+            showLoadingOverlay("⏳ Connecting... Please wait...");
             let result = await loadCurrentGame();
             let retries = 0;
             // ከ5 ወደ 10 ሙከራ አሳድገነዋል
