@@ -1,6 +1,6 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v6.9 FINAL (Render Resilient)
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v7.0 FINAL (Production Ready)
 =====================================================================
 ✅ P0: original_jackpot ለ recover_game
 ✅ P0: recover_game original_jackpot=0 fallback
@@ -14,8 +14,9 @@
 ✅ secure_random.choice ለጨዋታ ቁጥሮች
 ✅ Bot/Engine dedicated connection locks
 ✅ CORS በ production ተገድቧል
-✅ አዲስ: የዳታቤዝ ግንኙነት ሲቋረጥ በራስ-ሰር እንደገና የሚገናኝ ስርዓት
-✅ አዲስ: የRender መተኛት ለመከላከል የKeep-Alive ስርዓት
+✅ አዲስ: የዳታቤዝ ግንኙነት ሲቋረጥ pool_pre_ping ያስተካክለዋል
+✅ አዲስ: ጨዋታው በቢያንስ 2 ካርድ ይጀመራል (የኦዲት ማስተካከያ)
+✅ አዲስ: የማይሰሩት keep_alive እና get_db_with_retry ተወግደዋል
 =====================================================================
 """
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
@@ -34,7 +35,6 @@ import threading
 import time
 import logging
 from datetime import datetime, timedelta, timezone
-import urllib.request
 
 from database import engine, get_db, Base, SessionLocal
 from auth import verify_telegram_init_data
@@ -51,9 +51,6 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
 AUTO_MIGRATE = os.getenv("AUTO_MIGRATE", "false").lower() == "true"
 ALLOWED_ORIGINS_ENV = os.getenv("ALLOWED_ORIGINS", "")
 BOT_POLLING_ENABLED = os.getenv("BOT_POLLING_ENABLED", "true").lower() == "true"
-
-# ✅ የRender አድራሻ (Keep-Alive ለማድረግ)
-RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "https://mybingobot-1.onrender.com")
 
 if ENVIRONMENT == "production":
     allowed_origins = [o.strip() for o in ALLOWED_ORIGINS_ENV.split(",") if o.strip()]
@@ -83,6 +80,9 @@ MAX_NUMBERS = 75
 MIN_DEPOSIT = 10
 MAX_DEPOSIT = 50000
 
+# ✅ የጨዋታው መጀመሪያ ሁኔታ (የኦዲት ማስተካከያ)
+MIN_CARDS_TO_START = 2
+
 REQUIRED_TABLES = {
     "users", "games", "cards",
     "transactions", "audit_logs", "ledger_entries",
@@ -93,7 +93,7 @@ if not BOT_TOKEN:
 if not ADMIN_ID:
     logger.warning("⚠️ ADMIN_ID is not set!")
 
-logger.info(f"🌍 ENV: {ENVIRONMENT} | AUTO_MIGRATE: {AUTO_MIGRATE}")
+logger.info(f"🌍 ENV: {ENVIRONMENT} | AUTO_MIGRATE: {AUTO_MIGRATE} | MIN_CARDS: {MIN_CARDS_TO_START}")
 
 bot = telebot.TeleBot(BOT_TOKEN) if BOT_TOKEN else None
 
@@ -101,23 +101,6 @@ if bot:
     @bot.message_handler(commands=['start'])
     def send_welcome(message):
         bot.reply_to(message, "ሰላም! የቢንጎ ጨዋታ ቦት እንኳን ደህና መጣህ/ሽ!")
-
-# ✅ አዲስ፡ የዳታቤዝ ግንኙነትን በራስ-ሰር ማደስ (Auto-reconnect)
-def get_db_with_retry():
-    """የዳታቤዝ ግንኙነት ከተቋረጠ እንደገና ለመገናኘት የሚሞክር ተግባር"""
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            db = SessionLocal()
-            # ግንኙነቱ መስራቱን ለማረጋገጥ ቀላል ጥያቄ
-            db.execute(text("SELECT 1"))
-            return db
-        except (OperationalError, DBAPIError) as e:
-            logger.warning(f"⚠️ DB connection attempt {attempt + 1} failed: {e}")
-            if db:
-                db.close()
-            time.sleep(2) # ከመሞከሩ በፊት 2 ሰከንድ ይጠብቁ
-    raise HTTPException(status_code=503, detail="የዳታቤዝ ግንኙነት አልተሳካም። እባክዎ ቆይተው እንደገና ይሞክሩ።")
 
 def run_bot():
     if not bot or not BOT_POLLING_ENABLED:
@@ -394,7 +377,7 @@ def _cancel_game_with_refund(db, game_id: int):
 
     return (refunded_count, is_complete)
 
-# ✅ አዲስ፡ የጤና ማረጋገጫ (Health Check) እና Keep-Alive
+# ✅ የጤና ማረጋገጫ (Health Check) - ለUptimeRobot/Domain Monitor ጥቅም ላይ ይውላል
 @app.get("/")
 def read_root():
     return FileResponse("templates/index.html")
@@ -405,7 +388,7 @@ def api_status():
 
 @app.get("/api/health")
 def health_check():
-    """Render እና ሌሎች አገልግሎቶች ሰርቨሩ መስራቱን ለማረጋገጥ የሚጠቀሙበት"""
+    """ውጫዊ የሞኒተሪንግ አገልግሎቶች ሰርቨሩን ንቁ ለማድረግ የሚጠቀሙበት"""
     try:
         db = SessionLocal()
         db.execute(text("SELECT 1"))
@@ -577,8 +560,8 @@ def buy_card(req: BuyCardRequest,
     total_cards = db.query(models.Card).filter(models.Card.game_id == req.game_id).count()
     game.jackpot = (game.jackpot or Decimal("0.00")) + card_price
 
-    # ✅ ለፈተና ወደ 1 ተቀይሯል። ለእውነተኛ ጨዋታ ወደ 2 መመለስ ይችላሉ።
-    if total_cards >= 1 and game.status == "waiting":
+    # ✅ የኦዲት ማስተካከያ: ጨዋታው በቢያንስ 2 ካርድ ይጀመራል
+    if total_cards >= MIN_CARDS_TO_START and game.status == "waiting":
         game.status = "playing"
         game.started_at = datetime.now(timezone.utc)
         game.last_drawn_at = datetime.now(timezone.utc)
@@ -1182,12 +1165,11 @@ def bingo_engine_loop():
         got_lock = False
 
         try:
-            # ✅ የዳታቤዝ ግንኙነት ከተቋረጠ እንደገና ለመገናኘት ይሞክራል
             try:
                 dedicated_conn = engine.raw_connection()
             except (OperationalError, DBAPIError) as db_err:
                 logger.warning(f"⚠️ Engine DB connection failed: {db_err}. Retrying in next tick...")
-                continue  # ወደ ቀጣዩ ዑደት ይሂድ
+                continue
 
             cursor = dedicated_conn.cursor()
             cursor.execute("SELECT pg_try_advisory_lock(%s)", (ENGINE_LOCK_ID,))
@@ -1458,19 +1440,6 @@ def validate_schema():
 
     return (True, "All checks passed")
 
-# ✅ አዲስ፡ የRender መተኛትን ለመከላከል የሚሰራ Keep-Alive ስርዓት
-def keep_alive_ping():
-    """በየ10 ደቂቃው ሰርቨሩን በመጎብኘት እንዳይተኛ ያደርጋል"""
-    while True:
-        try:
-            time.sleep(600)  # 10 ደቂቃ ይጠብቃል
-            req = urllib.request.Request(f"{RENDER_EXTERNAL_URL}/api/health")
-            with urllib.request.urlopen(req, timeout=10) as response:
-                if response.status == 200:
-                    logger.info("✅ Keep-alive ping successful")
-        except Exception as e:
-            logger.warning(f"⚠️ Keep-alive ping failed: {e}")
-
 @app.on_event("startup")
 def startup_event():
     try:
@@ -1526,10 +1495,6 @@ def startup_event():
 
     threading.Thread(target=bingo_engine_loop, daemon=True).start()
     logger.info("✅ Bingo engine started.")
-
-    # ✅ አዲስ፡ Keep-Alive Thread ማስጀመር
-    threading.Thread(target=keep_alive_ping, daemon=True).start()
-    logger.info("✅ Keep-Alive thread started.")
 
     logger.info("✅ Bingo backend started successfully.")
 
