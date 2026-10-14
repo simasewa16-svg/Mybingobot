@@ -464,13 +464,13 @@
             }
         }
 
-        // ✅ የላቀ Retry — ሰርቨሩ ሲነቃ ለመጠበቅ (አሁን የቴክኒክ ቃላት የሉትም)
-        async function fetchWithServerWakeup(url, options = {}, maxAttempts = 15, delayMs = 5000) {
+        // ✅ የላቀ Retry — ሰርቨሩ ሲነቃ ለመጠበቅ (የተሻሻለ)
+        async function fetchWithServerWakeup(url, options = {}, maxAttempts = 20, delayMs = 6000) {
             let lastError = null;
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 20000);
+                    const timeoutId = setTimeout(() => controller.abort(), 30000);
                     
                     const fetchOptions = { ...options, signal: controller.signal };
                     const res = await fetch(url, fetchOptions);
@@ -479,14 +479,13 @@
                     if (res.status === 502 || res.status === 503 || res.status === 504) {
                         lastError = new Error(`Server waking up (${res.status})`);
                         if (attempt < maxAttempts) {
-                            // ደንበኛው ቴክኒካዊ መረጃ እንዳያይ ቀላል መልእክት ብቻ እናሳያለን
                             showLoadingOverlay("⏳ Please wait...\nServer is starting up.");
                             await new Promise(r => setTimeout(r, delayMs));
                             continue;
                         }
                         throw lastError;
                     }
-                    hideLoadingOverlay(); // ስኬታማ ሲሆን መሸፈኛውን አጥፋ
+                    hideLoadingOverlay();
                     return res;
                 } catch (err) {
                     lastError = err;
@@ -533,7 +532,6 @@
 
         async function loadCurrentGame() {
             try {
-                // ከ4 ወደ 15 ሙከራ አሳድገነዋል
                 const res = await fetchWithServerWakeup(`${API_BASE_URL}/api/game/current/state`, {}, 15, 5000);
                 const data = await res.json();
                 if (data.id) {
@@ -1232,8 +1230,7 @@
             showLoadingOverlay("⏳ Connecting... Please wait...");
             let result = await loadCurrentGame();
             let retries = 0;
-            // ከ5 ወደ 10 ሙከራ አሳድገነዋል
-            while (!result.ok && retries < 10) {
+            while (!result.ok && retries < 15) {
                 await new Promise(r => setTimeout(r, 10000));
                 result = await loadCurrentGame();
                 retries++;
