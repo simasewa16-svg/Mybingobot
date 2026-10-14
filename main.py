@@ -577,7 +577,8 @@ def buy_card(req: BuyCardRequest,
     total_cards = db.query(models.Card).filter(models.Card.game_id == req.game_id).count()
     game.jackpot = (game.jackpot or Decimal("0.00")) + card_price
 
-    if total_cards >= 2 and game.status == "waiting":
+    # ✅ ለፈተና ወደ 1 ተቀይሯል። ለእውነተኛ ጨዋታ ወደ 2 መመለስ ይችላሉ።
+    if total_cards >= 1 and game.status == "waiting":
         game.status = "playing"
         game.started_at = datetime.now(timezone.utc)
         game.last_drawn_at = datetime.now(timezone.utc)
