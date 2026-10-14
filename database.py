@@ -1,6 +1,6 @@
 """
 =====================================================================
-✅ የዳታቤዝ ማዋቀሪያ (database.py) - v8.2 FINAL (Connection Stability)
+✅ የዳታቤዝ ማዋቀሪያ (database.py) - v8.3 FINAL (Connection Stability + Retry)
 =====================================================================
 ✅ Fail-fast: DATABASE_URL ካልተዋቀረ አፑ ፈጽሞ አይነሳም
 ✅ psycopg2 driver (requirements.txt ጋር ይጣጣማል)
@@ -8,14 +8,16 @@
 ✅ pool_size=3 (አነስተኛ connection pool)
 ✅ pool_timeout=30 (ጊዜ ገደብ)
 ✅ UTC timezone
+✅ check_db_connection(): ዳታቤዙ እስኪነቃ ድረስ የሚጠብቅ ፈንክሽን (Retry Logic)
 =====================================================================
 """
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.exc import OperationalError, DBAPIError
 import os
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -92,3 +94,29 @@ def get_db():
             db.close()
         except Exception:
             pass
+
+
+# =====================================================================
+# ✅ አዲስ የተጨመረ: ዳታቤዙ እስኪነቃ ድረስ የሚጠብቅ ፈንክሽን
+# =====================================================================
+def check_db_connection(max_retries=5, delay_seconds=5):
+    """
+    ዳታቤዙ መንቃቱን ለማረጋገጥ የሚረዳ ፈንክሽን።
+    በተለይ ለRender ነፃ ፕላን (Free Tier) ላይ ዳታቤዙ ከእንቅልፍ ሲነቃ ጊዜ ስለሚወስድ ይህ ፈንክሽን ይጠቅማል።
+    """
+    retries = max_retries
+    while retries > 0:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            logger.info("✅ ዳታቤዙ በተሳካ ሁኔታ ተገናኝቷል!")
+            return True
+        except OperationalError as e:
+            logger.warning(f"⏳ ዳታቤዙ ገና አልነቃም። {retries} ሙከራ ቀርቷል... ({e})")
+            retries -= 1
+            if retries > 0:
+                time.sleep(delay_seconds)  # ለተወሰነ ሰከንድ ጠብቅ
+            else:
+                logger.error("❌ ዳታቤዙን ማግኘት አልቻልንም! እባክህ የDATABASE_URL እና የዳታቤዙን ሁኔታ አረጋግጥ።")
+                return False
+    return False
