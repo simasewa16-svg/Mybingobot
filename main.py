@@ -1,13 +1,13 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v8.4 FINAL (Non-Blocking Startup)
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v8.5 FINAL (Bug Fixes & Activity)
 =====================================================================
 ✅ አዲስ: startup_event ላይ ዳታቤዙን አይጠብቅም (Render 50s timeout ለማስቀረት)
 ✅ አዲስ: safe_db_execute ወደ 15 ሙከራ ከፍ ብሏል (እስከ 60 ሰከንድ ይጠብቃል)
+✅ አዲስ: admin_adjustment ላይ UUID በመጠቀም Unique Constraint ስህተት ተስተካክሏል
+✅ አዲስ: User.last_active በget_current_user ውስጥ ይዘመናል
 ✅ DB Error Handler Middleware (503 ይመልሳል → Retry ይሰራል)
 ✅ get_or_create_current_game ላይ Connection Retry
-✅ InterfaceError ድጋፍ
-✅ ሁሉንም ያካትታል (multi-admin, withdrawal, players, fraud)
 =====================================================================
 """
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from decimal import Decimal, ROUND_DOWN
 from typing import Literal, List, Optional
 import os
+import uuid  # ✅ አዲስ የተጨመረ ለUnique ID
 import secrets
 import telebot
 import threading
@@ -214,10 +215,9 @@ def lock_game(db, game_id):
     return db.query(models.Game).filter(models.Game.id == game_id).with_for_update().first()
 
 
-def safe_db_execute(db: Session, retries: int = 15):
+def safe_db_execute(db: Session, retries: int = 20):
     """
-    ✅ አዲስ: DB ግንኙነትን ማረጋገጥ እና እንደገና መሞከር
-    ይህ ፈንክሽን አሁን ዳታቤዙ እስኪነቃ ድረስ እስከ 60 ሰከንድ ይጠብቃል
+    ✅ DB ግንኙነትን ማረጋገጥ እና እንደገና መሞከር (እስከ 100 ሰከንድ)
     """
     for attempt in range(retries):
         try:
@@ -230,7 +230,7 @@ def safe_db_execute(db: Session, retries: int = 15):
             except Exception:
                 pass
             if attempt < retries - 1:
-                time.sleep(4) # በየ4 ሰከንዱ ይሞክራል (15 * 4 = 60 ሰከንድ)
+                time.sleep(5)  # በየ5 ሰከንዱ ይሞክራል
             else:
                 return False
     return False
@@ -339,6 +339,14 @@ async def get_current_user(
                 raise HTTPException(status_code=500, detail="የተጠቃሚ ፍጠራ ስህተት")
     if user.is_banned:
         raise HTTPException(status_code=403, detail="አካውንትዎ ታግዷል")
+    
+    # ✅ አዲስ: የተጠቃሚውን የመጨረሻ እንቅስቃሴ ማዘመን
+    try:
+        user.last_active = datetime.now(timezone.utc)
+        db.commit()
+    except Exception:
+        db.rollback()
+        
     return user
 
 
@@ -1169,10 +1177,12 @@ def adjust_balance_v2(user_id: int, req: AdjustBalanceRequest,
     if new_balance < 0:
         raise HTTPException(status_code=400, detail="ባላንስ ከዜሮ በታች መሆን አይችልም")
     user.balance = new_balance
+    # ✅ አዲስ: ልዩ የሆነ reference_id በመጠቀም Unique Constraint ስህተትን መከላከል
     db.add(models.LedgerEntry(
         user_id=user.id, entry_type="admin_adjustment",
         amount=req.amount, balance_after=new_balance,
-        reference_type="admin", reference_id=admin.telegram_id,
+        reference_type="admin", 
+        reference_id=f"{admin.telegram_id}_{uuid.uuid4().hex[:8]}",
         notes=f"[{admin.display_name}] {req.reason}"
     ))
     log_admin_action(db, admin, "adjust_balance",
