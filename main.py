@@ -1,15 +1,11 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v8.1 FULL SYSTEM
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v8.2 FINAL (DB Stability)
 =====================================================================
-✅ ሁሉንም ያካትታል:
-   - የጨዋታ ሞተር (Bingo engine)
-   - የቴሌግራም ቦት
-   - የAdmin ስርዓት (multi-admin, permissions, audit)
-   - የWithdrawal ስርዓት
-   - የተጫዋች ማስተዳደር
-   - የFraud flags
-   - የሰንጠረዥ እና ታሪክ
+✅ አዲስ: DB Error Handler Middleware (503 ይመልሳል → Retry ይሰራል)
+✅ አዲስ: get_or_create_current_game ላይ Connection Retry
+✅ አዲስ: InterfaceError ድጋፍ
+✅ ሁሉንም ያካትታል (multi-admin, withdrawal, players, fraud)
 =====================================================================
 """
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
@@ -17,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text, inspect, func
-from sqlalchemy.exc import IntegrityError, OperationalError, DBAPIError
+from sqlalchemy.exc import IntegrityError, OperationalError, DBAPIError, InterfaceError
 from pydantic import BaseModel, Field
 from decimal import Decimal, ROUND_DOWN
 from typing import Literal, List, Optional
@@ -67,6 +63,30 @@ app.add_middleware(
     allow_methods=["GET", "POST", "HEAD", "DELETE"],
     allow_headers=["Content-Type", "X-Telegram-Init-Data"],
 )
+
+# =====================================================================
+# ✅ አዲስ: DB Error Handler Middleware
+# =====================================================================
+@app.middleware("http")
+async def db_error_handler(request: Request, call_next):
+    """የDB ስህተቶችን ወደ 503 ይቀይራል (Retry እንዲሰራ)"""
+    try:
+        response = await call_next(request)
+        return response
+    except HTTPException:
+        raise
+    except (OperationalError, DBAPIError, InterfaceError) as e:
+        logger.error(f"❌ DB Error in {request.url.path}: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "ዳታቤዙ ግንኙነት ተቋርጧል — እባክዎ እንደገና ይሞክሩ"}
+        )
+    except Exception as e:
+        logger.exception(f"❌ Unhandled error in {request.url.path}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"የውስጥ ስህተት: {str(e)[:150]}"}
+        )
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 SUPER_ADMIN_ID = os.getenv("ADMIN_ID", "")
@@ -192,6 +212,25 @@ def lock_game(db, game_id):
     return db.query(models.Game).filter(models.Game.id == game_id).with_for_update().first()
 
 
+def safe_db_execute(db: Session, retries: int = 2):
+    """✅ አዲስ: DB ግንኙነትን ማረጋገጥ እና እንደገና መሞከር"""
+    for attempt in range(retries):
+        try:
+            db.execute(text("SELECT 1"))
+            return True
+        except (OperationalError, DBAPIError, InterfaceError) as e:
+            logger.warning(f"DB ping attempt {attempt + 1} failed: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            if attempt < retries - 1:
+                time.sleep(1)
+            else:
+                return False
+    return False
+
+
 # =====================================================================
 # ✅ Bingo Card Validation
 # =====================================================================
@@ -302,15 +341,12 @@ async def require_admin(
     user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """የAdmin ማረጋገጫ (multi-admin)"""
     admin = get_admin_user(db, user.telegram_id)
-    # Super Admin ገና ካልተፈጠረ ፍጠር
     if not admin and user.telegram_id == SUPER_ADMIN_ID:
         ensure_super_admin_exists(db)
         admin = get_admin_user(db, user.telegram_id)
     if not admin:
         raise HTTPException(status_code=403, detail="የAdmin ፈቃድ የለዎትም")
-    # last_login update
     try:
         admin.last_login = datetime.now(timezone.utc)
         db.commit()
@@ -463,48 +499,76 @@ def health_check():
 # =====================================================================
 @app.get("/api/game/current/state")
 def get_or_create_current_game(db: Session = Depends(get_db)):
-    db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": GAME_CREATE_LOCK_ID})
-    game = db.query(models.Game).filter(
-        models.Game.status.in_(["waiting", "playing"])
-    ).order_by(models.Game.id.desc()).first()
-    if game and game.status == "waiting" and game.created_at:
-        if datetime.now(timezone.utc) - game.created_at > timedelta(minutes=WAITING_TIMEOUT_MINUTES):
-            _, is_complete = _cancel_game_with_refund(db, game.id)
-            if not is_complete:
-                raise HTTPException(status_code=503, detail="የቀድሞ ጨዋታ ገንዘብ መመለስ አልተሟላም።")
-            game = None
-    if not game:
-        prev_game = db.query(models.Game).filter(
-            models.Game.rollover_jackpot > 0,
-            models.Game.status == "finished"
-        ).order_by(models.Game.id.desc()).with_for_update().first()
-        initial_jackpot = Decimal("0.00")
-        rollover_received = Decimal("0.00")
-        if prev_game and prev_game.rollover_jackpot > 0:
-            initial_jackpot = prev_game.rollover_jackpot
-            rollover_received = prev_game.rollover_jackpot
-            prev_game.rollover_jackpot = Decimal("0.00")
-            prev_game.rollover_transferred = True
-        game = models.Game(
-            status="waiting",
-            jackpot=initial_jackpot,
-            original_jackpot=initial_jackpot,
-            rollover_received=rollover_received,
-            card_price=Decimal("10.00")
+    # ✅ አዲስ: የDB ግንኙነት ማረጋገጫ እና እንደገና መሞከር
+    if not safe_db_execute(db, retries=2):
+        logger.error("Cannot reach database in get_or_create_current_game")
+        raise HTTPException(
+            status_code=503,
+            detail="ዳታቤዙ ግንኙነት ተቋርጧል — እባክዎ እንደገና ይሞክሩ"
         )
-        db.add(game)
-    db.commit()
-    db.refresh(game)
-    player_count = db.query(models.Card).filter(models.Card.game_id == game.id).count()
-    return {
-        "id": game.id, "status": game.status,
-        "jackpot": float(game.jackpot or 0),
-        "card_price": float(game.card_price or 10),
-        "call_count": game.call_count,
-        "called_numbers": game.called_numbers or "",
-        "last_number": game.last_number,
-        "players_count": player_count
-    }
+    
+    try:
+        db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": GAME_CREATE_LOCK_ID})
+        
+        game = db.query(models.Game).filter(
+            models.Game.status.in_(["waiting", "playing"])
+        ).order_by(models.Game.id.desc()).first()
+        
+        if game and game.status == "waiting" and game.created_at:
+            if datetime.now(timezone.utc) - game.created_at > timedelta(minutes=WAITING_TIMEOUT_MINUTES):
+                _, is_complete = _cancel_game_with_refund(db, game.id)
+                if not is_complete:
+                    raise HTTPException(status_code=503, detail="የቀድሞ ጨዋታ ገንዘብ መመለስ አልተሟላም።")
+                game = None
+        
+        if not game:
+            prev_game = db.query(models.Game).filter(
+                models.Game.rollover_jackpot > 0,
+                models.Game.status == "finished"
+            ).order_by(models.Game.id.desc()).with_for_update().first()
+            
+            initial_jackpot = Decimal("0.00")
+            rollover_received = Decimal("0.00")
+            if prev_game and prev_game.rollover_jackpot > 0:
+                initial_jackpot = prev_game.rollover_jackpot
+                rollover_received = prev_game.rollover_jackpot
+                prev_game.rollover_jackpot = Decimal("0.00")
+                prev_game.rollover_transferred = True
+            
+            game = models.Game(
+                status="waiting",
+                jackpot=initial_jackpot,
+                original_jackpot=initial_jackpot,
+                rollover_received=rollover_received,
+                card_price=Decimal("10.00")
+            )
+            db.add(game)
+        
+        db.commit()
+        db.refresh(game)
+        
+        player_count = db.query(models.Card).filter(models.Card.game_id == game.id).count()
+        return {
+            "id": game.id, "status": game.status,
+            "jackpot": float(game.jackpot or 0),
+            "card_price": float(game.card_price or 10),
+            "call_count": game.call_count,
+            "called_numbers": game.called_numbers or "",
+            "last_number": game.last_number,
+            "players_count": player_count
+        }
+    except HTTPException:
+        raise
+    except (OperationalError, DBAPIError, InterfaceError) as e:
+        logger.error(f"DB error in get_or_create_current_game: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=503,
+            detail="ዳታቤዙ ግንኙነት ተቋርጧል — እባክዎ እንደገና ይሞክሩ"
+        )
 
 
 @app.get("/api/game/{game_id}")
@@ -1408,7 +1472,7 @@ def bingo_engine_loop():
         try:
             try:
                 dedicated_conn = engine.raw_connection()
-            except (OperationalError, DBAPIError) as db_err:
+            except (OperationalError, DBAPIError, InterfaceError) as db_err:
                 logger.warning(f"⚠️ Engine DB connection failed: {db_err}")
                 continue
             cursor = dedicated_conn.cursor()
