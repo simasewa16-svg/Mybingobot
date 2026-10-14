@@ -1,16 +1,17 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ዳታቤዝ ሞዴሎች (models.py) - v8.1 FULL SYSTEM
+✅ የBingo ጨዋታ ዳታቤዝ ሞዴሎች (models.py) - v8.2 FIXED
 =====================================================================
 ✅ User, Game, Card, Transaction, LedgerEntry, AuditLog
-✅ አዲስ: AdminUser (ብዙ አስተዳዳሪዎች)
-✅ አዲስ: Withdrawal (ገንዘብ ማውጣት)
-✅ አዲስ: PlayerNote (የAdmin ማስታወሻዎች)
-✅ አዲስ: FraudFlag (የማጭበርበር ምልክቶች)
-✅ አዲስ: User - first_name, last_name, is_flagged, notes, last_active
-✅ አዲስ: Transaction - notes
-✅ አዲስ: AuditLog - actor_username, actor_role, ip_address
-✅ አዲስ: LedgerEntry - reference_type/id NOT NULL (migration ጋር ይጣጣማል)
+✅ AdminUser (ብዙ አስተዳዳሪዎች)
+✅ Withdrawal (ገንዘብ ማውጣት)
+✅ PlayerNote (የAdmin ማስታወሻዎች)
+✅ FraudFlag (የማጭበርበር ምልክቶች)
+✅ User - first_name, last_name, is_flagged, notes, last_active
+✅ Transaction - notes
+✅ AuditLog - actor_username, actor_role, ip_address
+✅ LedgerEntry - reference_type/id NOT NULL
+🔧 FIX: is_test_game column ተወግዷል (DB ውስጥ ስለሌለ)
 =====================================================================
 """
 from sqlalchemy import (
@@ -72,7 +73,7 @@ class Game(Base):
     last_drawn_at = Column(DateTime(timezone=True), nullable=True)
     payout_completed = Column(Boolean, nullable=False, default=False)
     refunded = Column(Boolean, nullable=False, default=False)
-    is_test_game = Column(Boolean, nullable=False, default=False)
+    # ✅ is_test_game ተወግዷል — በዳታቤዙ ውስጥ ስለሌለ
 
     cards = relationship("Card", back_populates="game", foreign_keys="Card.game_id")
 
@@ -155,7 +156,6 @@ class LedgerEntry(Base):
     entry_type = Column(String(50), nullable=False, index=True)
     amount = Column(Numeric(12, 2), nullable=False)
     balance_after = Column(Numeric(12, 2), nullable=False)
-    # ✅ NOT NULL — migration 002_v6_5_schema ጋር ይጣጣማል
     reference_type = Column(String(50), nullable=False, default="system")
     reference_id = Column(String(50), nullable=False, default="auto")
     notes = Column(Text, nullable=True)
@@ -200,7 +200,6 @@ class AdminUser(Base):
     username = Column(String(255), nullable=True)
     display_name = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False, default="sub_admin", index=True)
-    # role values: super_admin, sub_admin, finance_admin, moderator, viewer
     permissions = Column(Text, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_by = Column(String(50), nullable=True)
@@ -233,9 +232,7 @@ class FraudFlag(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     flag_type = Column(String(50), nullable=False)
-    # flag_type: rapid_deposits, multiple_accounts, unusual_play, suspicious_pattern
     severity = Column(String(20), nullable=False, default="low")
-    # severity: low, medium, high
     details = Column(Text, nullable=True)
     is_resolved = Column(Boolean, nullable=False, default=False)
     resolved_by = Column(String(50), nullable=True)
