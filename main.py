@@ -1,9 +1,21 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v7.1 (Schema Auto-Fix + HEAD)
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v7.3 FINAL
 =====================================================================
-✅ አዲስ: /api/health ላይ HEAD method ድጋፍ (ለUptimeRobot/Domain Monitor)
-✅ አዲስ: Schema ሲበላሽ ሠንጠረዦችን በራስ-ሰር ማደስ
+✅ P0: original_jackpot ለ recover_game
+✅ P0: recover_game original_jackpot=0 fallback
+✅ P1: get_or_create_current_game ያለ rollback
+✅ P1: reconcile() refunded cards
+✅ P1: validate_schema() rollover_transferred + original_jackpot
+✅ P1: parse_called_numbers() malformed reject
+✅ P1: with_for_update() on prev_game
+✅ startup_event auto-migration + Schema Auto-Fix
+✅ secure_random.choice ለጨዋታ ቁጥሮች
+✅ Bot/Engine dedicated connection locks
+✅ CORS በ production ተገድቧል
+✅ /api/health ላይ HEAD method ድጋፍ
+✅ አዲስ: /api/leaderboard (ሰንጠረዥ) - ጠፍቶ ነበር!
+✅ አዲስ: /api/history (የተጠቃሚ ታሪክ) - ጠፍቶ ነበር!
 =====================================================================
 """
 from fastapi import FastAPI, Depends, HTTPException, Header, Request, Response
@@ -67,6 +79,7 @@ MAX_NUMBERS = 75
 MIN_DEPOSIT = 10
 MAX_DEPOSIT = 50000
 
+# ✅ ለሙከራ ወደ 1 ይቀይሩት፣ ለእውነተኛ ጨዋታ ወደ 2 መልሱት
 MIN_CARDS_TO_START = 2
 
 REQUIRED_TABLES = {
@@ -322,10 +335,9 @@ def read_root():
 def api_status():
     return {"message": "የቢንጎ ጨዋታ ጀርባ ስርዓት እየሰራ ነው!"}
 
-# ✅ አዲስ: HEAD method ድጋፍ (ለሞኒተሪንግ አገልግሎቶች)
+# ✅ HEAD method ድጋፍ (ለሞኒተሪንግ አገልግሎቶች)
 @app.api_route("/api/health", methods=["GET", "HEAD"])
 def health_check():
-    """ውጫዊ የሞኒተሪንግ አገልግሎቶች ሰርቨሩን ንቁ ለማድረግ የሚጠቀሙበት"""
     try:
         db = SessionLocal()
         db.execute(text("SELECT 1"))
@@ -491,6 +503,69 @@ def get_game_state(game_id: int, db: Session = Depends(get_db)):
         "last_number": game.last_number,
         "players_count": player_count, "winner_id": game.winner_id
     }
+
+# ✅ አዲስ: የሰንጠረዥ (Leaderboard) አድራሻ
+@app.get("/api/leaderboard")
+def get_leaderboard(db: Session = Depends(get_db)):
+    """ከፍተኛ ሽልማት ያገኙ ተጫዋቾች"""
+    try:
+        results = db.query(
+            models.User.id,
+            models.User.telegram_id,
+            models.User.username,
+            func.coalesce(func.sum(models.LedgerEntry.amount), 0).label("total_won"),
+            func.count(models.LedgerEntry.id).label("win_count")
+        ).join(
+            models.LedgerEntry,
+            models.LedgerEntry.user_id == models.User.id
+        ).filter(
+            models.LedgerEntry.entry_type == "prize_payout"
+        ).group_by(
+            models.User.id, models.User.telegram_id, models.User.username
+        ).order_by(
+            func.sum(models.LedgerEntry.amount).desc()
+        ).limit(20).all()
+
+        leaderboard = []
+        for i, r in enumerate(results, 1):
+            username = r.username or f"User_{str(r.telegram_id)[-4:]}"
+            leaderboard.append({
+                "rank": i,
+                "username": username,
+                "total_won": float(r.total_won),
+                "win_count": int(r.win_count)
+            })
+        return {"leaderboard": leaderboard}
+    except Exception as e:
+        logger.error(f"Leaderboard error: {e}")
+        return {"leaderboard": []}
+
+# ✅ አዲስ: የታሪክ (History) አድራሻ
+@app.get("/api/history")
+def get_history(
+    user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """የተጠቃሚው የግብይት ታሪክ"""
+    try:
+        entries = db.query(models.LedgerEntry).filter(
+            models.LedgerEntry.user_id == user.id
+        ).order_by(models.LedgerEntry.created_at.desc()).limit(50).all()
+
+        history = []
+        for e in entries:
+            history.append({
+                "id": e.id,
+                "type": e.entry_type,
+                "amount": float(e.amount),
+                "balance_after": float(e.balance_after),
+                "notes": e.notes or "",
+                "created_at": e.created_at.strftime("%Y-%m-%d %H:%M") if e.created_at else ""
+            })
+        return {"history": history}
+    except Exception as e:
+        logger.error(f"History error: {e}")
+        raise HTTPException(status_code=500, detail="ታሪክ ማምጣት አልተቻለም")
 
 @app.get("/api/admin/pending")
 def get_pending_deposits(admin: models.User = Depends(require_admin), db: Session = Depends(get_db)):
@@ -971,11 +1046,15 @@ def validate_schema():
         "users": {"id", "telegram_id", "balance", "is_banned", "created_at"},
         "games": {"id", "status", "jackpot", "original_jackpot", "rollover_jackpot",
                   "rollover_received", "rollover_transferred", "card_price",
-                  "payout_completed", "refunded"},
-        "cards": {"id", "user_id", "game_id", "numbers", "price_paid", "is_winner", "refunded", "refunded_at"},
-        "transactions": {"id", "user_id", "amount", "method", "reference", "status", "reviewed_by", "reviewed_at"},
-        "ledger_entries": {"id", "user_id", "entry_type", "amount", "balance_after", "reference_type", "reference_id"},
-        "audit_logs": {"id", "actor_id", "action", "target_type", "target_id"},
+                  "payout_completed", "refunded", "call_count", "called_numbers",
+                  "last_number", "winner_id", "started_at", "finished_at", "last_drawn_at"},
+        "cards": {"id", "user_id", "game_id", "numbers", "price_paid", "is_winner",
+                  "refunded", "refunded_at", "created_at"},
+        "transactions": {"id", "user_id", "amount", "method", "reference", "status",
+                         "reviewed_by", "reviewed_at", "created_at"},
+        "ledger_entries": {"id", "user_id", "entry_type", "amount", "balance_after",
+                           "reference_type", "reference_id", "notes", "created_at"},
+        "audit_logs": {"id", "actor_id", "action", "target_type", "target_id", "details", "created_at"},
     }
     missing_columns = {}
     for table, required_cols in required_columns.items():
@@ -993,7 +1072,6 @@ def startup_event():
         inspector = inspect(engine)
         existing_tables = set(inspector.get_table_names(schema="public"))
 
-        # ✅ 1. Migration ያስኪድ
         if "alembic_version" in existing_tables:
             try:
                 from alembic.config import Config
@@ -1005,7 +1083,6 @@ def startup_event():
             except Exception as mig_err:
                 logger.warning(f"⚠️ Alembic migration failed: {mig_err}")
 
-        # ✅ 2. ሠንጠረዦች መኖራቸውን አረጋግጥ
         inspector = inspect(engine)
         existing_tables = set(inspector.get_table_names(schema="public"))
         missing_tables = sorted(REQUIRED_TABLES - existing_tables)
@@ -1015,26 +1092,22 @@ def startup_event():
             Base.metadata.create_all(bind=engine)
             logger.info("✅ create_all completed")
 
-        # ✅ 3. Schema validation + ማስተካከያ (አዲስ)
         is_valid, message = validate_schema()
         if is_valid:
             logger.info("✅ Schema validation passed")
         else:
             logger.warning(f"⚠️ Schema invalid: {message}")
             logger.warning("🔧 Dropping and recreating all tables to fix schema...")
-            # ሠንጠረዦችን አጥፍቶ እንደገና ይፈጥራል
             Base.metadata.drop_all(bind=engine)
             Base.metadata.create_all(bind=engine)
             logger.info("✅ All tables recreated with correct schema")
 
-            # እንደገና ያረጋግጣል
             is_valid_after, message_after = validate_schema()
             if is_valid_after:
                 logger.info("✅ Schema validation passed after recreation")
             else:
                 logger.error(f"❌ Schema still invalid: {message_after}")
 
-        # ✅ 4. Connection test
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         logger.info("✅ Database connection verified")
@@ -1049,7 +1122,6 @@ def startup_event():
 
     threading.Thread(target=bingo_engine_loop, daemon=True).start()
     logger.info("✅ Bingo engine started.")
-
     logger.info("✅ Bingo backend started successfully.")
 
 if __name__ == "__main__":
