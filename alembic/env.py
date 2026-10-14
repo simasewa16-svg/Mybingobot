@@ -1,10 +1,11 @@
 """
 =====================================================================
-✅ Alembic Environment Configuration (alembic/env.py)
+✅ Alembic Environment Configuration (alembic/env.py) - v8.1
 =====================================================================
-- DATABASE_URL ከ environment ያነባል
-- ሁሉንም models ሜታዳታ ያገናኛል
-- PostgreSQL-only ማረጋገጫ
+✅ DATABASE_URL ከ Environment Variable ይመጣል (hardcoded የለም)
+✅ Base.metadata ን ከ models.py ይጠቀማል
+✅ Offline እና Online mode ድጋፍ
+✅ UTC timezone
 =====================================================================
 """
 from logging.config import fileConfig
@@ -13,44 +14,50 @@ from alembic import context
 import os
 import sys
 
-# ✅ የፕሮጀክቱን root ወደ sys.path ጨምር
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-# ✅ የ models ሜታዳታ አምጣ
-from database import Base
-import models  # noqa: F401 - ሁሉንም ሠንጠረዦች ለማስመዝገብ ያስፈልጋል
+# ✅ Project root ወደ sys.path ጨምር (models ን import ለማድረግ)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # ✅ Alembic Config object
 config = context.config
 
-# ✅ Logging ማዋቀር
+# ✅ Logging configuration
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# ✅ ሁሉንም ሠንጠረዦች ለማወቅ
-target_metadata = Base.metadata
+# ✅ DATABASE_URL ን ከ Environment Variable አምጣ
+DATABASE_URL = os.getenv("DATABASE_URL")
 
+if not DATABASE_URL:
+    raise RuntimeError(
+        "❌ DATABASE_URL must be set for Alembic migrations. "
+        "Aborting to prevent connecting to wrong database."
+    )
 
-def get_database_url():
-    """✅ DATABASE_URL ከ environment ማምጣት"""
-    url = os.getenv("DATABASE_URL")
-    if not url:
-        raise RuntimeError(
-            "❌ DATABASE_URL environment variable is not set!"
-        )
-    # ✅ Heroku/Render style URL ማስተካከል
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql://", 1)
-    if not url.startswith("postgresql://"):
-        raise RuntimeError(
-            "❌ Only PostgreSQL URLs are supported!"
-        )
-    return url
+# ✅ Heroku/Render style URL ማስተካከል
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# ✅ psycopg2 driver ን ተጠቀም (database.py ጋር ይጣጣማል)
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace(
+        "postgresql://", "postgresql+psycopg2://", 1
+    )
+
+# ✅ Config ውስጥ URL ን አስገባ
+config.set_main_option("sqlalchemy.url", DATABASE_URL)
+
+# ✅ Base.metadata ን ከ models.py አምጣ (autogenerate ለማድረግ)
+try:
+    from database import Base
+    import models  # noqa: F401 — ሁሉንም ሞዴሎች መጫን አስፈላጊ ነው
+    target_metadata = Base.metadata
+except ImportError as e:
+    raise RuntimeError(f"❌ Failed to import models: {e}")
 
 
 def run_migrations_offline() -> None:
-    """✅ Offline mode - SQL script ብቻ ያመነጫል"""
-    url = get_database_url()
+    """Offline mode — SQL script ብቻ ማዘጋጀት (DB connection ሳያስፈልግ)"""
+    url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -65,32 +72,33 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """✅ Online mode - ከዳታቤዝ ጋር ተገናኝቶ migration ያስኬዳል"""
-    configuration = config.get_section(config.config_ini_section) or {}
-    configuration["sqlalchemy.url"] = get_database_url()
-
+    """Online mode — DB connection ጋር migration ማስኬድ"""
     connectable = engine_from_config(
-        configuration,
+        config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
     with connectable.connect() as connection:
-        # ✅ PostgreSQL ማረጋገጥ
-        connection.execute(text("SELECT version()"))
+        # ✅ Timezone UTC አዘጋጅ
+        try:
+            connection.execute(text("SET timezone='UTC'"))
+            connection.commit()
+        except Exception:
+            pass
 
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
             compare_server_default=True,
-            render_as_batch=False,
         )
 
         with context.begin_transaction():
             context.run_migrations()
 
 
+# ✅ Mode መምረጥ
 if context.is_offline_mode():
     run_migrations_offline()
 else:
