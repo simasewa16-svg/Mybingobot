@@ -1772,3 +1772,1358 @@ def _cancel_game_with_refund(db, game_id: int):
         game.status = "cancelled"
         game.finished_at = datetime.now(timezone.utc)
     return (refunded_count, is_complete)
+  
+# =====================================================================
+# ✅ BASIC ROUTES
+# =====================================================================
+@app.get("/")
+def read_root():
+    try:
+        return FileResponse("templates/index.html")
+    except Exception as e:
+        logger.error(f"Template not found: {e}")
+        return JSONResponse(status_code=404, content={"detail": "Page not found"})
+
+
+@app.get("/api/status")
+def api_status():
+    return {"message": "የቢንጎ ጨዋታ ጀርባ ስርዓት እየሰራ ነው!"}
+
+
+@app.api_route("/api/health", methods=["GET", "HEAD"])
+def health_check():
+    try:
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        return {"status": "healthy", "database": "connected"}
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return JSONResponse(status_code=503,
+                            content={"status": "unhealthy", "error": str(e)})
+
+
+# =====================================================================
+# ✅ GAME ENDPOINTS
+# =====================================================================
+@app.get("/api/game/current/state")
+def get_or_create_current_game(db: Session = Depends(get_db)):
+    if not safe_db_execute(db, retries=15):
+        logger.error("Cannot reach database in get_or_create_current_game")
+        raise HTTPException(
+            status_code=503,
+            detail="ዳታቤዙ ግንኙነት ተቋርጧል — እባክዎ እንደገና ይሞክሩ"
+        )
+
+    try:
+        db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": GAME_CREATE_LOCK_ID})
+
+        game = db.query(models.Game).filter(
+            models.Game.status.in_(["waiting", "playing"])
+        ).order_by(models.Game.id.desc()).first()
+
+        if game and game.status == "waiting" and game.created_at:
+            if datetime.now(timezone.utc) - game.created_at > timedelta(minutes=WAITING_TIMEOUT_MINUTES):
+                _, is_complete = _cancel_game_with_refund(db, game.id)
+                if not is_complete:
+                    raise HTTPException(status_code=503, detail="የቀድሞ ጨዋታ ገንዘብ መመለስ አልተሟላም።")
+                game = None
+
+        if not game:
+            prev_game = db.query(models.Game).filter(
+                models.Game.rollover_jackpot > 0,
+                models.Game.status == "finished"
+            ).order_by(models.Game.id.desc()).with_for_update().first()
+
+            initial_jackpot = Decimal("0.00")
+            rollover_received = Decimal("0.00")
+            if prev_game and prev_game.rollover_jackpot > 0:
+                initial_jackpot = prev_game.rollover_jackpot
+                rollover_received = prev_game.rollover_jackpot
+                prev_game.rollover_jackpot = Decimal("0.00")
+                prev_game.rollover_transferred = True
+
+            card_price = get_setting(db, "card_price", Decimal("10.00"))
+
+            game = models.Game(
+                status="waiting",
+                jackpot=initial_jackpot,
+                original_jackpot=initial_jackpot,
+                rollover_received=rollover_received,
+                card_price=card_price
+            )
+            db.add(game)
+
+        db.commit()
+        db.refresh(game)
+
+        player_count = db.query(models.Card).filter(models.Card.game_id == game.id).count()
+        return {
+            "id": game.id, "status": game.status,
+            "jackpot": float(game.jackpot or 0),
+            "card_price": float(game.card_price or 10),
+            "call_count": game.call_count,
+            "called_numbers": game.called_numbers or "",
+            "last_number": game.last_number,
+            "players_count": player_count
+        }
+    except HTTPException:
+        raise
+    except (OperationalError, DBAPIError, InterfaceError) as e:
+        logger.error(f"DB error in get_or_create_current_game: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=503,
+            detail="ዳታቤዙ ግንኙነት ተቋርጧል — እባክዎ እንደገና ይሞክሩ"
+        )
+
+
+@app.get("/api/game/{game_id}")
+def get_game_state(game_id: int, db: Session = Depends(get_db)):
+    game = db.query(models.Game).filter(models.Game.id == game_id).first()
+    if not game:
+        return {"error": "ጨዋታው አልተገኘም"}
+    player_count = db.query(models.Card).filter(models.Card.game_id == game_id).count()
+    return {
+        "id": game.id, "status": game.status,
+        "jackpot": float(game.jackpot or 0),
+        "card_price": float(game.card_price or 10),
+        "call_count": game.call_count,
+        "called_numbers": game.called_numbers or "",
+        "last_number": game.last_number,
+        "players_count": player_count,
+        "winner_id": game.winner_id
+    }
+
+
+@app.get("/api/me")
+def get_me(user: models.User = Depends(get_current_user),
+           db: Session = Depends(get_db)):
+    admin = get_admin_user(db, user.telegram_id)
+    return {
+        "id": user.id,
+        "telegram_id": user.telegram_id,
+        "username": user.username,
+        "first_name": user.first_name,
+        "balance": float(user.balance),
+        "is_admin": bool(admin),
+        "is_super_admin": bool(admin and is_super_admin(admin))
+    }
+
+
+@app.get("/api/my_card/{game_id}")
+def get_my_card(game_id: int,
+                user: models.User = Depends(get_current_user),
+                db: Session = Depends(get_db)):
+    card = db.query(models.Card).filter(
+        models.Card.user_id == user.id,
+        models.Card.game_id == game_id
+    ).first()
+    if not card:
+        return {"has_card": False}
+    return {"has_card": True, "card_id": card.id,
+            "numbers": card.numbers, "is_winner": card.is_winner}
+
+
+@app.post("/api/deposit")
+def request_deposit(req: DepositRequest,
+                    user: models.User = Depends(get_current_user),
+                    db: Session = Depends(get_db)):
+    clean_reference = req.reference.strip()
+    if not clean_reference:
+        raise HTTPException(status_code=422, detail="የደረሰኝ ቁጥሩ ባዶ መሆን የለበትም")
+    
+    new_trans = models.Transaction(
+        user_id=user.id, amount=Decimal(str(req.amount)),
+        method=req.method, reference=clean_reference, status="pending"
+    )
+    db.add(new_trans)
+    try:
+        db.commit()
+        db.refresh(new_trans)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="ይህ የደረሰኝ ቁጥር ተጠቅሟል!")
+
+    # =========================================================
+    # ✅ አዲስ የተጨመረ: ለAdmin የቴሌግራም ማሳወቂያ መላክ
+    # =========================================================
+    if bot and SUPER_ADMIN_CHAT_ID:
+        try:
+            safe_name = escape_markdown(user.first_name or 'ያልታወቀ')
+            safe_username = escape_markdown(user.username or 'N/A')
+            
+            msg_text = (
+                f"💰 *አዲስ የDeposit ጥያቄ!*\n\n"
+                f"👤 *ተጠቃሚ:* {safe_name} (@{safe_username})\n"
+                f"🆔 *መታወቂያ:* `{user.telegram_id}`\n"
+                f"💵 *መጠን:* *{req.amount} ብር*\n"
+                f"📱 *መንገድ:* {req.method}\n"
+                f"🧾 *ደረሰኝ:* `{clean_reference}`\n\n"
+                f"👉 እባክዎ ወደ Admin Panel ገብተው ያጽድቁት።"
+            )
+            
+            try:
+                bot.send_message(SUPER_ADMIN_CHAT_ID, msg_text, parse_mode="Markdown")
+            except Exception as md_err:
+                logger.warning(f"Markdown failed for deposit notification, trying plain text: {md_err}")
+                plain_text = msg_text.replace('*', '').replace('`', '').replace('_', '')
+                bot.send_message(SUPER_ADMIN_CHAT_ID, plain_text)
+                
+        except Exception as tg_err:
+            logger.error(f"Failed to send deposit notification to admin: {tg_err}")
+
+    return {"message": "የክፍያ ጥያቄዎ ተልኳል። አስተዳዳሪው ካጸደቀ በኋላ ገንዘቡ ወደ አካውንትዎ ይገባል።", "transaction_id": new_trans.id}
+
+
+@app.post("/api/buy_card")
+def buy_card(req: BuyCardRequest,
+             user: models.User = Depends(get_current_user),
+             db: Session = Depends(get_db)):
+    game = lock_game(db, req.game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="ጨዋታው አልተገኘም")
+    if game.status != "waiting":
+        raise HTTPException(status_code=400, detail="ጨዋታው ተጀምሯል ወይም ተጠናቋል")
+    locked_user = lock_user(db, user.id)
+    card_price = game.card_price or Decimal("10.00")
+    if locked_user.balance < card_price:
+        raise HTTPException(status_code=400, detail="በቂ ባላንስ የለዎትም")
+    existing_card = db.query(models.Card).filter(
+        models.Card.user_id == locked_user.id,
+        models.Card.game_id == req.game_id
+    ).first()
+    if existing_card:
+        raise HTTPException(status_code=400, detail="በዚህ ጨዋታ ካርድ ገዝተዋል")
+    columns = [
+        secure_random.sample(range(1, 16), 5),
+        secure_random.sample(range(16, 31), 5),
+        secure_random.sample(range(31, 46), 5),
+        secure_random.sample(range(46, 61), 5),
+        secure_random.sample(range(61, 76), 5),
+    ]
+    nums = [columns[c][r] for r in range(5) for c in range(5)]
+    nums[12] = 0
+    is_valid, err = validate_bingo_card(nums)
+    if not is_valid:
+        logger.critical(f"Card generation failed: {err}")
+        raise HTTPException(status_code=500, detail="የካርድ ፍጠራ ስህተት")
+    card_numbers = ",".join(map(str, nums))
+    nested = db.begin_nested()
+    try:
+        locked_user.balance = locked_user.balance - card_price
+        new_card = models.Card(
+            user_id=locked_user.id, game_id=req.game_id,
+            numbers=card_numbers, price_paid=card_price
+        )
+        db.add(new_card)
+        db.flush()
+        add_ledger(db, locked_user, "card_purchase", -card_price,
+                   ref_type="card", ref_id=new_card.id,
+                   notes=f"ጨዋታ #{game.id}")
+        nested.commit()
+    except IntegrityError:
+        nested.rollback()
+        raise HTTPException(status_code=400, detail="ድግግሞሽ ተገኝቷል!")
+    except Exception as e:
+        nested.rollback()
+        logger.error(f"Buy card error: {e}")
+        raise HTTPException(status_code=500, detail="የውስጥ ስህተት")
+    total_cards = db.query(models.Card).filter(models.Card.game_id == req.game_id).count()
+
+    min_cards = get_setting(db, "min_cards_to_start", 2)
+    game.jackpot = (game.jackpot or Decimal("0.00")) + card_price
+    if total_cards >= min_cards and game.status == "waiting":
+        game.status = "playing"
+        game.started_at = datetime.now(timezone.utc)
+        game.last_drawn_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"message": "ካርድ ተገዝቷል!",
+            "balance": float(locked_user.balance), "card": card_numbers}
+
+
+# =====================================================================
+# ✅ LEADERBOARD & HISTORY
+# =====================================================================
+@app.get("/api/leaderboard")
+def get_leaderboard(db: Session = Depends(get_db)):
+    try:
+        results = db.query(
+            models.User.id,
+            models.User.telegram_id,
+            models.User.username,
+            models.User.first_name,
+            func.coalesce(func.sum(models.LedgerEntry.amount), 0).label("total_won"),
+            func.count(models.LedgerEntry.id).label("win_count")
+        ).join(
+            models.LedgerEntry,
+            models.LedgerEntry.user_id == models.User.id
+        ).filter(
+            models.LedgerEntry.entry_type == "prize_payout"
+        ).group_by(
+            models.User.id, models.User.telegram_id,
+            models.User.username, models.User.first_name
+        ).order_by(
+            func.sum(models.LedgerEntry.amount).desc()
+        ).limit(20).all()
+        leaderboard = []
+        for i, r in enumerate(results, 1):
+            name = r.username or r.first_name or f"User_{str(r.telegram_id)[-4:]}"
+            leaderboard.append({
+                "rank": i, "username": name,
+                "total_won": float(r.total_won),
+                "win_count": int(r.win_count)
+            })
+        return {"leaderboard": leaderboard}
+    except Exception as e:
+        logger.error(f"Leaderboard error: {e}")
+        return {"leaderboard": []}
+
+
+@app.get("/api/history")
+def get_history(user: models.User = Depends(get_current_user),
+                db: Session = Depends(get_db)):
+    try:
+        entries = db.query(models.LedgerEntry).filter(
+            models.LedgerEntry.user_id == user.id
+        ).order_by(models.LedgerEntry.created_at.desc()).limit(50).all()
+        history = []
+        for e in entries:
+            history.append({
+                "id": e.id, "type": e.entry_type,
+                "amount": float(e.amount),
+                "balance_after": float(e.balance_after),
+                "notes": e.notes or "",
+                "created_at": e.created_at.strftime("%Y-%m-%d %H:%M") if e.created_at else ""
+            })
+        return {"history": history}
+    except Exception as e:
+        logger.error(f"History error: {e}")
+        raise HTTPException(status_code=500, detail="ታሪክ ማምጣት አልተቻለም")
+
+
+# =====================================================================
+# ✅ FEEDBACK ENDPOINT
+# =====================================================================
+@app.post("/api/feedback")
+def submit_feedback(req: FeedbackRequest,
+                    user: models.User = Depends(get_current_user)):
+    now = time.time()
+    user_limits = _feedback_rate_limit[user.id]
+    user_limits[:] = [t for t in user_limits if now - t < 60]
+    if len(user_limits) >= 1:
+        raise HTTPException(
+            status_code=429,
+            detail="ውድ ደንበኛችን! እባክዎ 1 ደቂቃ ጠብቀው እንደገና ይሞክሩ።"
+        )
+    user_limits.append(now)
+
+    try:
+        if bot and SUPER_ADMIN_CHAT_ID:
+            max_msg = 3800
+            if len(req.message) <= max_msg:
+                msg_display = req.message
+                truncated_note = ""
+            else:
+                msg_display = req.message[:max_msg]
+                truncated_note = f"\n\n⚠️ _[ሙሉው መልእክት {len(req.message)} ፊደላት ነበር፣ {max_msg} ብቻ ታይቷል]_"
+
+            safe_name = escape_markdown(user.first_name or 'ያልታወቀ')
+            safe_username = escape_markdown(user.username or 'N/A')
+            safe_message = escape_markdown(msg_display)
+
+            text = f"📬 *አዲስ አስተያየት*\n\n"
+            text += f"👤 *ከ:* {safe_name} (@{safe_username})\n"
+            text += f"🆔 `{user.telegram_id}`\n"
+            text += f"📂 *ምድብ:* {req.category}\n"
+            text += f"📏 *ርዝመት:* {len(req.message)} ፊደላት\n\n"
+            text += f"💬 *መልእክት:*\n{safe_message}{truncated_note}"
+
+            try:
+                bot.send_message(SUPER_ADMIN_CHAT_ID, text, parse_mode="Markdown")
+            except Exception as tg_err:
+                logger.warning(f"Markdown failed, trying plain: {tg_err}")
+                try:
+                    plain_text = text.replace("*", "").replace("`", "").replace("_", "")
+                    bot.send_message(SUPER_ADMIN_CHAT_ID, plain_text)
+                except Exception as tg_err2:
+                    logger.error(f"Telegram send error: {tg_err2}")
+
+        return {"message": "አስተያየትዎ ደርሶናል! እናመሰግናለን።"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Feedback error: {e}")
+        raise HTTPException(status_code=500, detail="አስተያየት መላክ አልተቻለም")
+
+
+# =====================================================================
+# ✅ WITHDRAWAL ENDPOINTS
+# =====================================================================
+@app.post("/api/withdrawal")
+def request_withdrawal(req: WithdrawalRequest,
+                       user: models.User = Depends(get_current_user),
+                       db: Session = Depends(get_db)):
+    if req.amount < MIN_WITHDRAWAL:
+        raise HTTPException(status_code=400, detail=f"ዝቅተኛ መጠን {MIN_WITHDRAWAL} ብር")
+    if req.amount > MAX_WITHDRAWAL:
+        raise HTTPException(status_code=400, detail=f"ከፍተኛ መጠን {MAX_WITHDRAWAL} ብር")
+    locked_user = lock_user(db, user.id)
+    if locked_user.balance < req.amount:
+        raise HTTPException(status_code=400, detail="በቂ ባላንስ የለዎትም")
+    locked_user.balance = locked_user.balance - req.amount
+    withdrawal = models.Withdrawal(
+        user_id=locked_user.id, amount=req.amount,
+        method=req.method,
+        account_number=req.account_number.strip(),
+        account_name=req.account_name.strip() if req.account_name else None,
+        status="pending"
+    )
+    db.add(withdrawal)
+    db.flush()
+    add_ledger(db, locked_user, "withdrawal_pending", -req.amount,
+               ref_type="withdrawal", ref_id=withdrawal.id,
+               notes=f"ጥያቄ #{withdrawal.id}")
+    db.commit()
+    db.refresh(withdrawal)
+    return {"message": "የማውጣት ጥያቄዎ ተልኳል", "withdrawal_id": withdrawal.id}
+
+
+@app.get("/api/withdrawal/my")
+def my_withdrawals(user: models.User = Depends(get_current_user),
+                   db: Session = Depends(get_db)):
+    withdrawals = db.query(models.Withdrawal).filter(
+        models.Withdrawal.user_id == user.id
+    ).order_by(models.Withdrawal.created_at.desc()).limit(50).all()
+    return {"withdrawals": [{
+        "id": w.id, "amount": float(w.amount),
+        "method": w.method, "status": w.status,
+        "reference": w.reference,
+        "created_at": w.created_at.strftime("%Y-%m-%d %H:%M") if w.created_at else "",
+        "paid_at": w.paid_at.strftime("%Y-%m-%d %H:%M") if w.paid_at else None
+    } for w in withdrawals]}
+
+
+# =====================================================================
+# ✅ ADMIN: Dashboard & Stats
+# =====================================================================
+@app.get("/api/admin/me")
+def get_admin_info(admin: models.AdminUser = Depends(require_admin)):
+    return {
+        "id": admin.id,
+        "telegram_id": admin.telegram_id,
+        "display_name": admin.display_name,
+        "role": admin.role,
+        "is_super": is_super_admin(admin),
+        "permissions": get_admin_permissions(admin),
+        "all_permissions": ALL_PERMISSIONS
+    }
+
+
+@app.get("/api/admin/stats")
+def get_admin_stats(admin: models.AdminUser = Depends(require_admin),
+                    db: Session = Depends(get_db)):
+    require_permission(admin, "view_dashboard")
+    total_players = db.query(models.User).count()
+    banned_players = db.query(models.User).filter(models.User.is_banned == True).count()
+    flagged_players = db.query(models.User).filter(models.User.is_flagged == True).count()
+    pending_deposits = db.query(models.Transaction).filter(
+        models.Transaction.status == "pending").count()
+    pending_withdrawals = db.query(models.Withdrawal).filter(
+        models.Withdrawal.status == "pending").count()
+    total_deposited = db.query(func.coalesce(func.sum(models.Transaction.amount), 0)).filter(
+        models.Transaction.status == "approved").scalar() or 0
+    total_withdrawn = db.query(func.coalesce(func.sum(models.Withdrawal.amount), 0)).filter(
+        models.Withdrawal.status == "approved").scalar() or 0
+    total_payouts = db.query(func.coalesce(func.sum(models.LedgerEntry.amount), 0)).filter(
+        models.LedgerEntry.entry_type == "prize_payout").scalar() or 0
+    total_refunds = db.query(func.coalesce(func.sum(models.LedgerEntry.amount), 0)).filter(
+        models.LedgerEntry.entry_type == "refund").scalar() or 0
+    total_games = db.query(models.Game).count()
+    active_games = db.query(models.Game).filter(
+        models.Game.status.in_(["waiting", "playing"])).count()
+    return {
+        "players": {"total": total_players, "banned": banned_players,
+                    "flagged": flagged_players},
+        "pending": {"deposits": pending_deposits,
+                    "withdrawals": pending_withdrawals},
+        "money": {"total_deposited": float(total_deposited),
+                  "total_withdrawn": float(total_withdrawn),
+                  "total_payouts": float(total_payouts),
+                  "total_refunds": float(total_refunds)},
+        "games": {"total": total_games, "active": active_games}
+    }
+
+
+# =====================================================================
+# ✅ ADMIN: Settings
+# =====================================================================
+@app.get("/api/admin/settings")
+def get_settings_endpoint(admin: models.AdminUser = Depends(require_admin),
+                          db: Session = Depends(get_db)):
+    if not (is_super_admin(admin) or has_permission(admin, "control_games")):
+        raise HTTPException(status_code=403, detail="ፈቃድ የለዎትም")
+
+    settings = db.query(models.Setting).all()
+    result = {}
+    for s in settings:
+        try:
+            if s.value_type == "int":
+                result[s.key] = int(s.value)
+            elif s.value_type == "decimal":
+                result[s.key] = float(s.value)
+            elif s.value_type == "bool":
+                result[s.key] = s.value.lower() == "true"
+            else:
+                result[s.key] = s.value
+        except (ValueError, TypeError):
+            result[s.key] = s.value
+    return {"settings": result}
+
+
+@app.put("/api/admin/settings")
+def update_settings_endpoint(req: UpdateSettingsRequest,
+                             admin: models.AdminUser = Depends(require_admin),
+                             db: Session = Depends(get_db)):
+    if not (is_super_admin(admin) or has_permission(admin, "control_games")):
+        raise HTTPException(status_code=403, detail="ፈቃድ የለዎትም")
+
+    updates = req.dict(exclude_unset=True, exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="ምንም ለውጥ አልተላከም")
+
+    changed = []
+    for key, value in updates.items():
+        existing = db.query(models.Setting).filter(models.Setting.key == key).first()
+        if not existing:
+            raise HTTPException(status_code=404, detail=f"ቅንብር '{key}' አልተገኘም")
+
+        old_value = existing.value
+        vtype = existing.value_type
+        set_setting(db, key, value, vtype, admin.telegram_id)
+        changed.append(f"{key}: {old_value} → {value}")
+
+    log_admin_action(db, admin, "update_settings",
+                     target_type="settings", target_id="all",
+                     details=", ".join(changed))
+    db.commit()
+    return {"message": "ቅንብሮች በተሳካ ሁኔታ ተስተካክለዋል", "changed": changed}
+
+
+# =====================================================================
+# ✅ ADMIN: Deposits
+# =====================================================================
+@app.get("/api/admin/pending")
+def get_pending_deposits(admin: models.AdminUser = Depends(require_admin),
+                         db: Session = Depends(get_db)):
+    require_permission(admin, "approve_deposits")
+    pending = db.query(models.Transaction).filter(
+        models.Transaction.status == "pending"
+    ).order_by(models.Transaction.created_at.asc()).all()
+    result = []
+    for t in pending:
+        u = db.query(models.User).filter(models.User.id == t.user_id).first()
+        result.append({
+            "id": t.id,
+            "user_telegram_id": u.telegram_id if u else "Unknown",
+            "username": u.username if u else None,
+            "amount": float(t.amount), "method": t.method,
+            "reference": t.reference,
+            "created_at": t.created_at.strftime("%Y-%m-%d %H:%M") if t.created_at else ""
+        })
+    return {"pending": result}
+
+
+@app.post("/api/admin/approve/{transaction_id}")
+def approve_deposit(transaction_id: int,
+                    admin: models.AdminUser = Depends(require_admin),
+                    db: Session = Depends(get_db)):
+    require_permission(admin, "approve_deposits")
+    trans = db.query(models.Transaction).filter(
+        models.Transaction.id == transaction_id
+    ).with_for_update().first()
+    if not trans:
+        raise HTTPException(status_code=404, detail="ግብይቱ አልተገኘም")
+    if trans.status != "pending":
+        raise HTTPException(status_code=400, detail=f"ግብይቱ {trans.status} ነው")
+    user = lock_user(db, trans.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="ተጠቃሚው አልተገኘም")
+    nested = db.begin_nested()
+    try:
+        user.balance = user.balance + trans.amount
+        add_ledger(db, user, "deposit_approved", trans.amount,
+                   ref_type="transaction", ref_id=trans.id, notes=trans.method)
+        trans.status = "approved"
+        trans.reviewed_by = admin.telegram_id
+        trans.reviewed_at = datetime.now(timezone.utc)
+        log_admin_action(db, admin, "approve_deposit",
+                         target_type="transaction", target_id=trans.id,
+                         details=f"amount={trans.amount}")
+        nested.commit()
+    except IntegrityError:
+        nested.rollback()
+        raise HTTPException(status_code=400, detail="ግብይቱ አስቀድሞ ጸድቋል")
+    db.commit()
+    return {"message": "ጸድቋል!", "new_balance": float(user.balance)}
+
+
+@app.post("/api/admin/reject/{transaction_id}")
+def reject_deposit(transaction_id: int,
+                   admin: models.AdminUser = Depends(require_admin),
+                   db: Session = Depends(get_db)):
+    require_permission(admin, "approve_deposits")
+    trans = db.query(models.Transaction).filter(
+        models.Transaction.id == transaction_id
+    ).with_for_update().first()
+    if not trans:
+        raise HTTPException(status_code=404, detail="ግብይቱ አልተገኘም")
+    if trans.status != "pending":
+        raise HTTPException(status_code=400, detail=f"ግብይቱ {trans.status} ነው")
+    trans.status = "rejected"
+    trans.reviewed_by = admin.telegram_id
+    trans.reviewed_at = datetime.now(timezone.utc)
+    log_admin_action(db, admin, "reject_deposit",
+                     target_type="transaction", target_id=trans.id)
+    db.commit()
+    return {"message": "ተከልክሏል!"}
+
+
+# =====================================================================
+# ✅ ADMIN: Withdrawals
+# =====================================================================
+@app.get("/api/admin/withdrawals")
+def list_withdrawals(admin: models.AdminUser = Depends(require_admin),
+                     db: Session = Depends(get_db),
+                     status: Optional[str] = None):
+    require_permission(admin, "approve_withdrawals")
+    query = db.query(models.Withdrawal)
+    if status:
+        query = query.filter(models.Withdrawal.status == status)
+    withdrawals = query.order_by(models.Withdrawal.created_at.desc()).limit(100).all()
+    result = []
+    for w in withdrawals:
+        u = db.query(models.User).filter(models.User.id == w.user_id).first()
+        result.append({
+            "id": w.id, "user_id": w.user_id,
+            "user_telegram_id": u.telegram_id if u else "Unknown",
+            "username": u.username if u else None,
+            "amount": float(w.amount), "method": w.method,
+            "account_number": w.account_number,
+            "account_name": w.account_name,
+            "status": w.status, "reference": w.reference,
+            "created_at": w.created_at.strftime("%Y-%m-%d %H:%M") if w.created_at else ""
+        })
+    return {"withdrawals": result}
+
+
+@app.post("/api/admin/withdrawal/{wid}/approve")
+def approve_withdrawal(wid: int, req: ApproveWithdrawalRequest,
+                       admin: models.AdminUser = Depends(require_admin),
+                       db: Session = Depends(get_db)):
+    require_permission(admin, "approve_withdrawals")
+    withdrawal = db.query(models.Withdrawal).filter(
+        models.Withdrawal.id == wid
+    ).with_for_update().first()
+    if not withdrawal:
+        raise HTTPException(status_code=404, detail="ጥያቄው አልተገኘም")
+    if withdrawal.status != "pending":
+        raise HTTPException(status_code=400, detail=f"ጥያቄው {withdrawal.status} ነው")
+    withdrawal.status = "approved"
+    withdrawal.reference = req.reference.strip()
+    withdrawal.reviewed_by = admin.telegram_id
+    withdrawal.reviewed_at = datetime.now(timezone.utc)
+    withdrawal.paid_at = datetime.now(timezone.utc)
+    withdrawal.notes = req.notes
+    log_admin_action(db, admin, "approve_withdrawal",
+                     target_type="withdrawal", target_id=wid,
+                     details=f"amount={withdrawal.amount}, ref={req.reference}")
+    db.commit()
+    return {"message": "ተፈቅዷል"}
+
+
+@app.post("/api/admin/withdrawal/{wid}/reject")
+def reject_withdrawal(wid: int,
+                      admin: models.AdminUser = Depends(require_admin),
+                      db: Session = Depends(get_db)):
+    require_permission(admin, "approve_withdrawals")
+    withdrawal = db.query(models.Withdrawal).filter(
+        models.Withdrawal.id == wid
+    ).with_for_update().first()
+    if not withdrawal:
+        raise HTTPException(status_code=404, detail="ጥያቄው አልተገኘም")
+    if withdrawal.status != "pending":
+        raise HTTPException(status_code=400, detail=f"ጥያቄው {withdrawal.status} ነው")
+    user = lock_user(db, withdrawal.user_id)
+    if user:
+        user.balance = user.balance + withdrawal.amount
+        add_ledger(db, user, "withdrawal_refund", withdrawal.amount,
+                   ref_type="withdrawal", ref_id=wid,
+                   notes=f"ጥያቄ #{wid} ተከልክሏል")
+    withdrawal.status = "rejected"
+    withdrawal.reviewed_by = admin.telegram_id
+    withdrawal.reviewed_at = datetime.now(timezone.utc)
+    log_admin_action(db, admin, "reject_withdrawal",
+                     target_type="withdrawal", target_id=wid,
+                     details=f"amount={withdrawal.amount}")
+    db.commit()
+    return {"message": "ተከልክሏል እና ባላንስ ተመልሷል"}
+
+
+# =====================================================================
+# ✅ ADMIN: Player Management
+# =====================================================================
+@app.get("/api/admin/players")
+def get_all_players(admin: models.AdminUser = Depends(require_admin),
+                    db: Session = Depends(get_db),
+                    search: Optional[str] = None,
+                    filter_type: Optional[str] = None,
+                    sort_by: Optional[str] = "created_at",
+                    limit: int = 100):
+    require_permission(admin, "view_players")
+    query = db.query(models.User)
+    if search:
+        term = f"%{search}%"
+        query = query.filter(
+            (models.User.username.ilike(term)) |
+            (models.User.telegram_id.ilike(term)) |
+            (models.User.first_name.ilike(term))
+        )
+    if filter_type == "banned":
+        query = query.filter(models.User.is_banned == True)
+    elif filter_type == "flagged":
+        query = query.filter(models.User.is_flagged == True)
+    elif filter_type == "new":
+        week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        query = query.filter(models.User.created_at >= week_ago)
+    if sort_by == "balance":
+        query = query.order_by(models.User.balance.desc())
+    else:
+        query = query.order_by(models.User.created_at.desc())
+    users = query.limit(limit).all()
+    result = []
+    for u in users:
+        total_games = db.query(models.Card).filter(models.Card.user_id == u.id).count()
+        total_wins = db.query(models.Card).filter(
+            models.Card.user_id == u.id, models.Card.is_winner == True).count()
+        total_won = db.query(func.coalesce(func.sum(models.LedgerEntry.amount), 0)).filter(
+            models.LedgerEntry.user_id == u.id,
+            models.LedgerEntry.entry_type == "prize_payout").scalar() or 0
+        total_deposited = db.query(func.coalesce(func.sum(models.Transaction.amount), 0)).filter(
+            models.Transaction.user_id == u.id,
+            models.Transaction.status == "approved").scalar() or 0
+        name = u.first_name or u.username or f"User_{u.telegram_id[-4:]}"
+        result.append({
+            "id": u.id, "telegram_id": u.telegram_id,
+            "username": u.username, "display_name": name,
+            "balance": float(u.balance),
+            "is_banned": u.is_banned, "is_flagged": u.is_flagged,
+            "created_at": u.created_at.strftime("%Y-%m-%d") if u.created_at else "",
+            "total_games": total_games, "total_wins": total_wins,
+            "total_won": float(total_won),
+            "total_deposited": float(total_deposited),
+            "win_rate": round((total_wins / total_games * 100), 1) if total_games > 0 else 0.0
+        })
+    return {"players": result, "total": len(result)}
+
+
+@app.get("/api/admin/player/{user_id}/full")
+def get_player_full(user_id: int,
+                    admin: models.AdminUser = Depends(require_admin),
+                    db: Session = Depends(get_db)):
+    require_permission(admin, "view_players")
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="ተጫዋች አልተገኘም")
+    total_games = db.query(models.Card).filter(models.Card.user_id == user.id).count()
+    total_wins = db.query(models.Card).filter(
+        models.Card.user_id == user.id, models.Card.is_winner == True).count()
+    total_won = db.query(func.coalesce(func.sum(models.LedgerEntry.amount), 0)).filter(
+        models.LedgerEntry.user_id == user.id,
+        models.LedgerEntry.entry_type == "prize_payout").scalar() or 0
+    total_deposited = db.query(func.coalesce(func.sum(models.Transaction.amount), 0)).filter(
+        models.Transaction.user_id == user.id,
+        models.Transaction.status == "approved").scalar() or 0
+    total_withdrawn = db.query(func.coalesce(func.sum(models.Withdrawal.amount), 0)).filter(
+        models.Withdrawal.user_id == user.id,
+        models.Withdrawal.status == "approved").scalar() or 0
+    total_cards_bought = db.query(func.coalesce(func.sum(models.Card.price_paid), 0)).filter(
+        models.Card.user_id == user.id).scalar() or 0
+    transactions = db.query(models.Transaction).filter(
+        models.Transaction.user_id == user.id
+    ).order_by(models.Transaction.created_at.desc()).limit(20).all()
+    cards = db.query(models.Card).filter(
+        models.Card.user_id == user.id
+    ).order_by(models.Card.created_at.desc()).limit(20).all()
+    withdrawals = db.query(models.Withdrawal).filter(
+        models.Withdrawal.user_id == user.id
+    ).order_by(models.Withdrawal.created_at.desc()).limit(10).all()
+    notes = db.query(models.PlayerNote).filter(
+        models.PlayerNote.user_id == user.id
+    ).order_by(models.PlayerNote.created_at.desc()).limit(10).all()
+    name = user.first_name or user.username or f"User_{user.telegram_id[-4:]}"
+    return {
+        "user": {
+            "id": user.id, "telegram_id": user.telegram_id,
+            "username": user.username, "first_name": user.first_name,
+            "display_name": name, "balance": float(user.balance),
+            "is_banned": user.is_banned, "is_flagged": user.is_flagged,
+            "created_at": user.created_at.strftime("%Y-%m-%d %H:%M") if user.created_at else "",
+            "last_active": user.last_active.strftime("%Y-%m-%d %H:%M") if user.last_active else None
+        },
+        "stats": {
+            "total_games": total_games, "total_wins": total_wins,
+            "total_won": float(total_won),
+            "total_deposited": float(total_deposited),
+            "total_withdrawn": float(total_withdrawn),
+            "total_cards_bought": float(total_cards_bought),
+            "net_profit": float(total_deposited) - float(total_withdrawn),
+            "win_rate": round((total_wins / total_games * 100), 1) if total_games > 0 else 0.0
+        },
+        "transactions": [{"id": t.id, "amount": float(t.amount), "method": t.method,
+                          "status": t.status, "reference": t.reference,
+                          "created_at": t.created_at.strftime("%Y-%m-%d %H:%M") if t.created_at else ""
+                          } for t in transactions],
+        "cards": [{"id": c.id, "game_id": c.game_id, "is_winner": c.is_winner,
+                   "price_paid": float(c.price_paid),
+                   "created_at": c.created_at.strftime("%Y-%m-%d %H:%M") if c.created_at else ""
+                   } for c in cards],
+        "withdrawals": [{"id": w.id, "amount": float(w.amount), "method": w.method,
+                         "status": w.status, "account_number": w.account_number,
+                         "created_at": w.created_at.strftime("%Y-%m-%d %H:%M") if w.created_at else ""
+                         } for w in withdrawals],
+        "notes": [{"id": n.id, "note": n.note, "author": n.author_name,
+                   "is_warning": n.is_warning,
+                   "created_at": n.created_at.strftime("%Y-%m-%d %H:%M") if n.created_at else ""
+                   } for n in notes]
+    }
+
+
+@app.post("/api/admin/player/{user_id}/adjust_balance")
+def adjust_balance_v2(user_id: int, req: AdjustBalanceRequest,
+                      admin: models.AdminUser = Depends(require_admin),
+                      db: Session = Depends(get_db)):
+    require_permission(admin, "adjust_balance")
+    user = db.query(models.User).filter(models.User.id == user_id).with_for_update().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="ተጫዋች አልተገኘም")
+    if req.amount == 0:
+        raise HTTPException(status_code=400, detail="መጠኑ ዜሮ መሆን አይችልም")
+    new_balance = Decimal(str(user.balance)) + req.amount
+    if new_balance < 0:
+        raise HTTPException(status_code=400, detail="ባላንስ ከዜሮ በታች መሆን አይችልም")
+    user.balance = new_balance
+    db.add(models.LedgerEntry(
+        user_id=user.id, entry_type="admin_adjustment",
+        amount=req.amount, balance_after=new_balance,
+        reference_type="admin",
+        reference_id=f"{admin.telegram_id}_{uuid.uuid4().hex[:8]}",
+        notes=f"[{admin.display_name}] {req.reason}"
+    ))
+    log_admin_action(db, admin, "adjust_balance",
+                     target_type="user", target_id=user.id,
+                     details=f"amount={req.amount}, reason={req.reason}")
+    db.commit()
+    return {"message": "ተስተካክሏል", "new_balance": float(new_balance)}
+
+
+@app.post("/api/admin/player/{user_id}/ban")
+def ban_player(user_id: int,
+               admin: models.AdminUser = Depends(require_admin),
+               db: Session = Depends(get_db)):
+    require_permission(admin, "ban_players")
+    user = db.query(models.User).filter(models.User.id == user_id).with_for_update().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="ተጫዋች አልተገኘም")
+    if user.telegram_id == admin.telegram_id:
+        raise HTTPException(status_code=400, detail="ራስዎን ማገድ አይችሉም")
+    user.is_banned = not user.is_banned
+    action = "ban_player" if user.is_banned else "unban_player"
+    log_admin_action(db, admin, action,
+                     target_type="user", target_id=user.id,
+                     details=f"user={user.telegram_id}")
+    db.commit()
+    return {"message": "ተገድቷል" if user.is_banned else "ከእገዳ ተነስቷል",
+            "is_banned": user.is_banned}
+
+
+@app.post("/api/admin/player/{user_id}/note")
+def add_player_note(user_id: int, req: AddPlayerNoteRequest,
+                    admin: models.AdminUser = Depends(require_admin),
+                    db: Session = Depends(get_db)):
+    require_permission(admin, "view_players")
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="ተጫዋች አልተገኘም")
+    note = models.PlayerNote(
+        user_id=user.id, author_id=admin.telegram_id,
+        author_name=admin.display_name,
+        note=req.note, is_warning=req.is_warning
+    )
+    db.add(note)
+    if req.is_warning:
+        user.is_flagged = True
+    log_admin_action(db, admin, "add_player_note",
+                     target_type="user", target_id=user.id,
+                     details=req.note[:100])
+    db.commit()
+    return {"message": "ማስታወሻ ተጨምሯል"}
+
+
+# =====================================================================
+# ✅ ADMIN: Manage Admins
+# =====================================================================
+@app.post("/api/admin/create")
+def create_admin(req: CreateAdminRequest,
+                 admin: models.AdminUser = Depends(require_admin),
+                 db: Session = Depends(get_db)):
+    if not is_super_admin(admin):
+        raise HTTPException(status_code=403, detail="Super Admin ብቻ ነው የሚችለው")
+    existing = db.query(models.AdminUser).filter(
+        models.AdminUser.telegram_id == req.telegram_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="ይህ Admin አስቀድሞ አለ")
+    new_admin = models.AdminUser(
+        telegram_id=req.telegram_id, display_name=req.display_name,
+        role=req.role, notes=req.notes,
+        created_by=admin.telegram_id, is_active=True
+    )
+    db.add(new_admin)
+    log_admin_action(db, admin, "create_admin",
+                     target_type="admin", target_id=req.telegram_id,
+                     details=f"role={req.role}")
+    db.commit()
+    return {"message": "Admin ተፈጥሯል", "id": new_admin.id}
+
+
+@app.get("/api/admin/list")
+def list_admins(admin: models.AdminUser = Depends(require_admin),
+                db: Session = Depends(get_db)):
+    if not is_super_admin(admin):
+        raise HTTPException(status_code=403, detail="Super Admin ብቻ ነው የሚችለው")
+    admins = db.query(models.AdminUser).order_by(models.AdminUser.created_at.desc()).all()
+    return {"admins": [{
+        "id": a.id, "telegram_id": a.telegram_id,
+        "display_name": a.display_name, "role": a.role,
+        "is_active": a.is_active, "is_super": a.role == "super_admin",
+        "created_at": a.created_at.strftime("%Y-%m-%d %H:%M") if a.created_at else "",
+        "last_login": a.last_login.strftime("%Y-%m-%d %H:%M") if a.last_login else "ምንም",
+        "notes": a.notes or ""
+    } for a in admins]}
+
+
+@app.post("/api/admin/{admin_id}/toggle")
+def toggle_admin(admin_id: int,
+                 admin: models.AdminUser = Depends(require_admin),
+                 db: Session = Depends(get_db)):
+    if not is_super_admin(admin):
+        raise HTTPException(status_code=403, detail="Super Admin ብቻ ነው የሚችለው")
+    target = db.query(models.AdminUser).filter(models.AdminUser.id == admin_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Admin አልተገኘም")
+    if target.role == "super_admin":
+        raise HTTPException(status_code=400, detail="Super Admin ማሰናከል አይቻልም")
+    target.is_active = not target.is_active
+    log_admin_action(db, admin, "toggle_admin",
+                     target_type="admin", target_id=target.telegram_id,
+                     details=f"is_active={target.is_active}")
+    db.commit()
+    return {"message": "ተስተካክሏል", "is_active": target.is_active}
+
+
+@app.delete("/api/admin/{admin_id}")
+def delete_admin(admin_id: int,
+                 admin: models.AdminUser = Depends(require_admin),
+                 db: Session = Depends(get_db)):
+    if not is_super_admin(admin):
+        raise HTTPException(status_code=403, detail="Super Admin ብቻ ነው የሚችለው")
+    target = db.query(models.AdminUser).filter(models.AdminUser.id == admin_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Admin አልተገኘም")
+    if target.role == "super_admin":
+        raise HTTPException(status_code=400, detail="Super Admin ማጥፋት አይቻልም")
+    log_admin_action(db, admin, "delete_admin",
+                     target_type="admin", target_id=target.telegram_id)
+    db.delete(target)
+    db.commit()
+    return {"message": "ተሰርዟል"}
+
+
+# =====================================================================
+# ✅ ADMIN: Audit Log
+# =====================================================================
+@app.get("/api/admin/audit")
+def get_audit_log(admin: models.AdminUser = Depends(require_admin),
+                  db: Session = Depends(get_db),
+                  limit: int = 100):
+    if not (is_super_admin(admin) or has_permission(admin, "view_audit")):
+        raise HTTPException(status_code=403, detail="ፈቃድ የለዎትም")
+    logs = db.query(models.AuditLog).order_by(
+        models.AuditLog.created_at.desc()).limit(limit).all()
+    return {"logs": [{
+        "id": l.id, "actor_id": l.actor_id,
+        "actor_username": l.actor_username, "actor_role": l.actor_role,
+        "action": l.action, "target_type": l.target_type,
+        "target_id": l.target_id, "details": l.details,
+        "created_at": l.created_at.strftime("%Y-%m-%d %H:%M") if l.created_at else ""
+    } for l in logs]}
+
+
+# =====================================================================
+# ✅ ADMIN: Recover Game & Reconcile
+# =====================================================================
+@app.post("/api/admin/recover_game/{game_id}")
+def recover_game(game_id: int,
+                 admin: models.AdminUser = Depends(require_admin),
+                 db: Session = Depends(get_db)):
+    require_permission(admin, "control_games")
+    game = lock_game(db, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="ጨዋታው አልተገኘም")
+    if game.payout_completed:
+        return {"message": "ጨዋታው አስቀድሞ ተጠናቋል", "status": game.status}
+    if game.status != "playing":
+        return {"message": f"ጨዋታው '{game.status}' ሁኔታ ላይ ነው።",
+                "payout_completed": False, "recovery_allowed": False,
+                "reason": f"invalid_status:{game.status}"}
+    payouts = db.query(models.LedgerEntry).filter(
+        models.LedgerEntry.entry_type == "prize_payout",
+        models.LedgerEntry.reference_type == "game",
+        models.LedgerEntry.reference_id == str(game.id)).all()
+    if not payouts:
+        return {"message": "ምንም የpayout መዝገብ የለም",
+                "payout_completed": False, "recovery_allowed": False,
+                "reason": "no_payouts"}
+    called_set = parse_called_numbers(game.called_numbers)
+    if called_set is None:
+        return {"message": "⚠️ called_numbers ቅርጸት ትክክል አይደለም",
+                "payout_completed": False, "recovery_allowed": False,
+                "reason": "invalid_called_numbers"}
+    payout_total = sum(Decimal(str(p.amount)) for p in payouts)
+    expected_jackpot = Decimal(str(game.original_jackpot or "0.00"))
+    if expected_jackpot == Decimal("0.00") and payout_total > Decimal("0.00"):
+        expected_jackpot = payout_total
+    jackpot_match = payout_total == expected_jackpot
+    winner_issues = []
+    for p in payouts:
+        if Decimal(str(p.amount)) < Decimal("0.00"):
+            winner_issues.append({"user_id": p.user_id, "issue": "negative_payout"})
+            continue
+        card = db.query(models.Card).filter(
+            models.Card.user_id == p.user_id, models.Card.game_id == game.id,
+            models.Card.refunded == False).first()
+        if not card:
+            winner_issues.append({"user_id": p.user_id, "issue": "no_card_found"})
+            continue
+        if not card.is_winner:
+            winner_issues.append({"user_id": p.user_id, "issue": "is_winner_flag_false"})
+            continue
+        try:
+            nums = [int(x) for x in card.numbers.split(",")]
+        except (ValueError, AttributeError):
+            winner_issues.append({"user_id": p.user_id, "issue": "invalid_card_numbers"})
+            continue
+        is_valid, err = validate_bingo_card(nums)
+        if not is_valid:
+            winner_issues.append({"user_id": p.user_id, "issue": f"invalid_card:{err}"})
+            continue
+        if not check_card_winner(nums, called_set):
+            winner_issues.append({"user_id": p.user_id, "issue": "not_actual_bingo_winner"})
+    balance_issues = []
+    unique_user_ids = {p.user_id for p in payouts}
+    for uid in unique_user_ids:
+        user = db.query(models.User).filter(models.User.id == uid).first()
+        if not user:
+            balance_issues.append({"user_id": uid, "issue": "user_not_found"})
+            continue
+        ledger_sum = db.query(func.coalesce(func.sum(models.LedgerEntry.amount), 0)).filter(
+            models.LedgerEntry.user_id == uid).scalar()
+        ledger_sum = Decimal(str(ledger_sum or "0.00"))
+        if ledger_sum != Decimal(str(user.balance)):
+            balance_issues.append({"user_id": user.telegram_id, "issue": "balance_mismatch"})
+    refunded_cards = db.query(models.Card).filter(
+        models.Card.game_id == game.id, models.Card.refunded == True).count()
+    winners_card_count = db.query(models.Card).filter(
+        models.Card.game_id == game.id, models.Card.is_winner == True,
+        models.Card.refunded == False).count()
+    all_checks_pass = (
+        jackpot_match and len(winner_issues) == 0 and len(balance_issues) == 0
+        and refunded_cards == 0 and winners_card_count == len(payouts)
+    )
+    if all_checks_pass:
+        game.payout_completed = True
+        game.status = "finished"
+        game.finished_at = datetime.now(timezone.utc)
+        game.jackpot = Decimal("0.00")
+        if payouts:
+            game.winner_id = min(payouts, key=lambda p: p.id).user_id
+        log_admin_action(db, admin, "recover_game",
+                         target_type="game", target_id=game.id,
+                         details=f"total={payout_total}")
+        db.commit()
+        return {"message": "✅ ጨዋታው በተሳካ ሁኔታ ተጠናቋል",
+                "payout_completed": True, "all_checks_pass": True}
+    return {"message": "⚠️ ማረጋገጫዎች አልተሟሉም",
+            "payout_completed": False, "all_checks_pass": False,
+            "winner_issues": winner_issues,
+            "balance_issues": balance_issues}
+
+
+@app.get("/api/admin/reconcile")
+def reconcile(admin: models.AdminUser = Depends(require_admin),
+              db: Session = Depends(get_db)):
+    if not is_super_admin(admin):
+        raise HTTPException(status_code=403, detail="Super Admin ብቻ ነው የሚችለው")
+    issues = []
+    users = db.query(models.User).all()
+    balance_mismatches = []
+    for u in users:
+        ledger_sum = db.query(func.coalesce(func.sum(models.LedgerEntry.amount), 0)).filter(
+            models.LedgerEntry.user_id == u.id).scalar()
+        ledger_sum = Decimal(str(ledger_sum or "0.00"))
+        if ledger_sum != Decimal(str(u.balance)):
+            balance_mismatches.append({"user_id": u.telegram_id,
+                                       "balance": float(u.balance),
+                                       "ledger_sum": float(ledger_sum)})
+    if balance_mismatches:
+        issues.append({"type": "balance_vs_ledger",
+                       "count": len(balance_mismatches),
+                       "details": balance_mismatches[:50]})
+    duplicate_entries = db.query(
+        models.LedgerEntry.user_id, models.LedgerEntry.entry_type,
+        models.LedgerEntry.reference_type, models.LedgerEntry.reference_id,
+        func.count(models.LedgerEntry.id).label("cnt")
+    ).group_by(
+        models.LedgerEntry.user_id, models.LedgerEntry.entry_type,
+        models.LedgerEntry.reference_type, models.LedgerEntry.reference_id
+    ).having(func.count(models.LedgerEntry.id) > 1).all()
+    if duplicate_entries:
+        issues.append({"type": "duplicate_ledger_entries",
+                       "count": len(duplicate_entries),
+                       "details": [{"user_id": d.user_id, "entry_type": d.entry_type,
+                                    "reference_id": d.reference_id,
+                                    "count": d.cnt} for d in duplicate_entries[:50]]})
+    return {"checked_users": len(users), "issues_found": len(issues),
+            "issues": issues}
+
+
+# =====================================================================
+# ✅ BINGO ENGINE LOOP
+# =====================================================================
+def bingo_engine_loop():
+    while True:
+        try:
+            db_tmp = SessionLocal()
+            try:
+                draw_interval = get_setting(db_tmp, "draw_interval_seconds", 5)
+            finally:
+                db_tmp.close()
+            time.sleep(draw_interval)
+        except Exception as e:
+            logger.error(f"Sleep error: {e}")
+            time.sleep(5)
+            continue
+
+        dedicated_conn = None
+        got_lock = False
+        try:
+            try:
+                dedicated_conn = engine.raw_connection()
+            except (OperationalError, DBAPIError, InterfaceError) as db_err:
+                logger.warning(f"⚠️ Engine DB connection failed: {db_err}")
+                continue
+            cursor = dedicated_conn.cursor()
+            cursor.execute("SELECT pg_try_advisory_lock(%s)", (ENGINE_LOCK_ID,))
+            got_lock = cursor.fetchone()[0]
+            cursor.close()
+            if not got_lock:
+                continue
+            db = SessionLocal()
+            try:
+                process_engine_tick(db)
+                db.commit()
+            except Exception as tick_error:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                logger.error(f"Engine tick error: {tick_error}")
+            finally:
+                try:
+                    db.close()
+                except Exception:
+                    pass
+        except Exception as fatal_error:
+            logger.error(f"Engine fatal error: {fatal_error}")
+        finally:
+            if dedicated_conn:
+                try:
+                    if got_lock:
+                        cursor = dedicated_conn.cursor()
+                        cursor.execute("SELECT pg_advisory_unlock(%s)", (ENGINE_LOCK_ID,))
+                        dedicated_conn.commit()
+                        cursor.close()
+                except Exception as e:
+                    logger.error(f"Engine unlock error: {e}")
+                finally:
+                    try:
+                        dedicated_conn.close()
+                    except Exception:
+                        pass
+
+
+def process_engine_tick(db):
+    old_games = db.query(models.Game).filter(models.Game.status == "waiting").all()
+    for og in old_games:
+        if og.created_at and datetime.now(timezone.utc) - og.created_at > timedelta(minutes=WAITING_TIMEOUT_MINUTES):
+            _, is_complete = _cancel_game_with_refund(db, og.id)
+            if not is_complete:
+                logger.critical(f"Game {og.id} refund INCOMPLETE")
+    games = db.query(models.Game).filter(
+        models.Game.status == "playing").with_for_update().all()
+    for game in games:
+        existing_payout = db.query(models.LedgerEntry.id).filter(
+            models.LedgerEntry.entry_type == "prize_payout",
+            models.LedgerEntry.reference_type == "game",
+            models.LedgerEntry.reference_id == str(game.id)).first()
+        if existing_payout and not game.payout_completed:
+            logger.critical(f"Game {game.id} FROZEN.")
+            continue
+        draw_interval = get_setting(db, "draw_interval_seconds", 5)
+        if game.last_drawn_at:
+            elapsed = (datetime.now(timezone.utc) - game.last_drawn_at).total_seconds()
+            if elapsed < draw_interval:
+                continue
+        called_set = parse_called_numbers(game.called_numbers)
+        if called_set is None:
+            logger.error(f"Game {game.id} corrupt called_numbers")
+            continue
+        called_list = sorted(called_set)
+        if len(called_list) >= MAX_NUMBERS:
+            _finish_game_no_winner(db, game)
+            continue
+        available = [n for n in range(1, MAX_NUMBERS + 1) if n not in called_set]
+        if not available:
+            _finish_game_no_winner(db, game)
+            continue
+        new_num = secure_random.choice(available)
+        called_list.append(new_num)
+        game.called_numbers = ",".join(str(x) for x in called_list)
+        game.last_number = new_num
+        game.call_count = len(called_list)
+        game.last_drawn_at = datetime.now(timezone.utc)
+        check_winners(db, game, set(called_list))
+
+
+def _finish_game_no_winner(db, game):
+    if game.payout_completed:
+        return
+    game.original_jackpot = game.jackpot or Decimal("0.00")
+    game.rollover_jackpot = (game.rollover_jackpot or Decimal("0.00")) + (game.jackpot or Decimal("0.00"))
+    game.jackpot = Decimal("0.00")
+    game.payout_completed = True
+    game.status = "finished"
+    game.finished_at = datetime.now(timezone.utc)
+
+
+def check_winners(db, game, called_set):
+    if game.payout_completed or game.status != "playing":
+        return
+    game = lock_game(db, game.id)
+    if not game or game.payout_completed or game.status != "playing":
+        return
+    existing_payouts = db.query(models.LedgerEntry).filter(
+        models.LedgerEntry.entry_type == "prize_payout",
+        models.LedgerEntry.reference_type == "game",
+        models.LedgerEntry.reference_id == str(game.id)).all()
+    if existing_payouts:
+        logger.critical(f"Game {game.id} existing payouts.")
+        return
+    cards = db.query(models.Card).filter(
+        models.Card.game_id == game.id,
+        models.Card.refunded.is_(False)
+    ).order_by(models.Card.id.asc()).with_for_update().all()
+    winners = []
+    for card in cards:
+        try:
+            nums = [int(x) for x in card.numbers.split(",")]
+        except (ValueError, AttributeError):
+            continue
+        if check_card_winner(nums, called_set):
+            winners.append(card)
+    if not winners:
+        return
+    jackpot = Decimal(str(game.jackpot or "0.00")).quantize(Decimal("0.01"))
+    if jackpot <= Decimal("0.00"):
+        logger.critical(f"Game {game.id}: jackpot {jackpot}.")
+        return
+    winners.sort(key=lambda c: c.id)
+    n = len(winners)
+    share = (jackpot / Decimal(n)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+    remainder = jackpot - (share * n)
+    payout_plan = []
+    for i, card in enumerate(winners):
+        amount = share + (remainder if i == 0 else Decimal("0.00"))
+        payout_plan.append((card, amount))
+    total_paid = Decimal("0.00")
+    for card, amount in payout_plan:
+        user = lock_user(db, card.user_id)
+        if not user:
+            raise RuntimeError(f"Winner user {card.user_id} not found")
+        user.balance = Decimal(str(user.balance)) + amount
+        add_ledger(db, user, "prize_payout", amount,
+                   ref_type="game", ref_id=game.id,
+                   notes=f"payout card {card.id} of game {game.id}")
+        card.is_winner = True
+        total_paid += amount
+    if total_paid != jackpot:
+        raise RuntimeError(f"Payout total {total_paid} != jackpot {jackpot}")
+    game.winner_id = winners[0].user_id
+    game.status = "finished"
+    game.finished_at = datetime.now(timezone.utc)
+    game.payout_completed = True
+    game.original_jackpot = jackpot
+    game.jackpot = Decimal("0.00")
+    logger.info(f"Game {game.id}: payout complete. winners={n}, total={total_paid}")
+
+
+# =====================================================================
+# ✅ STARTUP
+# =====================================================================
+@app.on_event("startup")
+def startup_event():
+    logger.info("⏳ ሰርቨሩ በመነሳት ላይ ነው...")
+
+    try:
+        db_init = SessionLocal()
+        try:
+            ensure_default_settings(db_init)
+        finally:
+            db_init.close()
+    except Exception as e:
+        logger.warning(f"⚠️ Settings init warning: {e}")
+
+    if bot:
+        threading.Thread(target=run_bot, daemon=True).start()
+        logger.info("✅ Bot thread started")
+
+    threading.Thread(target=bingo_engine_loop, daemon=True).start()
+    logger.info("✅ Bingo engine started.")
+
+    threading.Thread(target=cleanup_feedback_limits, daemon=True).start()
+    logger.info("✅ Feedback cleanup thread started")
+
+    logger.info("✅ Bingo backend started successfully.")
+
+
+# =====================================================================
+# ✅ Dynamic Port (Render $PORT)
+# =====================================================================
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    logger.info(f"🚀 Starting server on port {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
