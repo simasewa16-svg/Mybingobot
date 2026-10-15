@@ -1,6 +1,6 @@
 """
 =====================================================================
-✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v9.2 FINAL PRODUCTION
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v9.3 FINAL PRODUCTION
 =====================================================================
 ✅ Dynamic Port (Render $PORT ይከተላል)
 ✅ Mini App Button (/start ላይ)
@@ -14,6 +14,7 @@
 ✅ Markdown escape with SAFE FALLBACK
 ✅ Full message support (up to 3800 chars)
 ✅ Settings/Config table support (Admin Panel ይቀይራል)
+✅ Deposit Request Telegram Notification to Admin (NEW)
 =====================================================================
 """
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
@@ -803,6 +804,7 @@ def request_deposit(req: DepositRequest,
     clean_reference = req.reference.strip()
     if not clean_reference:
         raise HTTPException(status_code=422, detail="የደረሰኝ ቁጥሩ ባዶ መሆን የለበትም")
+    
     new_trans = models.Transaction(
         user_id=user.id, amount=Decimal(str(req.amount)),
         method=req.method, reference=clean_reference, status="pending"
@@ -814,7 +816,36 @@ def request_deposit(req: DepositRequest,
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="ይህ የደረሰኝ ቁጥር ተጠቅሟል!")
-    return {"message": "የክፍያ ጥያቄዎ ተልኳል።", "transaction_id": new_trans.id}
+
+    # =========================================================
+    # ✅ አዲስ የተጨመረ: ለAdmin የቴሌግራም ማሳወቂያ መላክ
+    # =========================================================
+    if bot and SUPER_ADMIN_CHAT_ID:
+        try:
+            safe_name = escape_markdown(user.first_name or 'ያልታወቀ')
+            safe_username = escape_markdown(user.username or 'N/A')
+            
+            msg_text = (
+                f"💰 *አዲስ የDeposit ጥያቄ!*\n\n"
+                f"👤 *ተጠቃሚ:* {safe_name} (@{safe_username})\n"
+                f"🆔 *መታወቂያ:* `{user.telegram_id}`\n"
+                f"💵 *መጠን:* *{req.amount} ብር*\n"
+                f"📱 *መንገድ:* {req.method}\n"
+                f"🧾 *ደረሰኝ:* `{clean_reference}`\n\n"
+                f"👉 እባክዎ ወደ Admin Panel ገብተው ያጽድቁት።"
+            )
+            
+            try:
+                bot.send_message(SUPER_ADMIN_CHAT_ID, msg_text, parse_mode="Markdown")
+            except Exception as md_err:
+                logger.warning(f"Markdown failed for deposit notification, trying plain text: {md_err}")
+                plain_text = msg_text.replace('*', '').replace('`', '').replace('_', '')
+                bot.send_message(SUPER_ADMIN_CHAT_ID, plain_text)
+                
+        except Exception as tg_err:
+            logger.error(f"Failed to send deposit notification to admin: {tg_err}")
+
+    return {"message": "የክፍያ ጥያቄዎ ተልኳል። አስተዳዳሪው ካጸደቀ በኋላ ገንዘቡ ወደ አካውንትዎ ይገባል።", "transaction_id": new_trans.id}
 
 
 @app.post("/api/buy_card")
