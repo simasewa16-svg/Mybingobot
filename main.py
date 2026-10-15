@@ -1,853 +1,3 @@
-"""
-=====================================================================
-✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v9.3 FINAL PRODUCTION
-=====================================================================
-✅ Dynamic Port (Render $PORT ይከተላል)
-✅ Mini App Button (/start ላይ)
-✅ Bot Auto-Restart Loop
-✅ Startup Retry Logic
-✅ DB Error Handler Middleware
-✅ UUID Fix for admin_adjustment
-✅ User.last_active update
-✅ Feedback endpoint (rate limited + Telegram)
-✅ Memory cleanup thread (rate limit cache)
-✅ Markdown escape with SAFE FALLBACK
-✅ Full message support (up to 3800 chars)
-✅ Settings/Config table support (Admin Panel ይቀይራል)
-✅ Deposit Request Telegram Notification to Admin (NEW)
-=====================================================================
-"""
-from fastapi import FastAPI, Depends, HTTPException, Header, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
-from sqlalchemy.orm import Session
-from sqlalchemy import text, inspect, func
-from sqlalchemy.exc import IntegrityError, OperationalError, DBAPIError, InterfaceError
-from pydantic import BaseModel, Field
-from decimal import Decimal, ROUND_DOWN
-from typing import Literal, List, Optional
-import os
-import uuid
-import secrets
-import telebot
-from telebot import types
-
-# ✅ Safe escape_markdown import (with fallback)
-try:
-    from telebot.formatting import escape_markdown
-except ImportError:
-    def escape_markdown(text: str) -> str:
-        if not isinstance(text, str):
-            text = str(text)
-        escape_chars = r'\_*[]()~`>#+-=|{}.!'
-        return ''.join('\\' + c if c in escape_chars else c for c in text)
-
-import threading
-import time
-import logging
-from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-
-from database import engine, get_db, Base, SessionLocal
-from auth import verify_telegram_init_data
-from admin_auth import (
-    get_admin_user, has_permission, is_super_admin,
-    require_permission, log_admin_action,
-    ALL_PERMISSIONS, ROLE_PERMISSIONS, get_admin_permissions,
-)
-import models
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-secure_random = secrets.SystemRandom()
-
-# ✅ Feedback Rate Limiting
-_feedback_rate_limit = defaultdict(list)
-
-# ✅ Settings Cache (60s TTL)
-_settings_cache = {}
-_settings_cache_time = 0
-SETTINGS_CACHE_TTL = 60
-
-app = FastAPI(title="Bingo Game API")
-
-# =====================================================================
-# ✅ የአካባቢ ቅንብሮች
-# =====================================================================
-ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
-ALLOWED_ORIGINS_ENV = os.getenv("ALLOWED_ORIGINS", "")
-BOT_POLLING_ENABLED = os.getenv("BOT_POLLING_ENABLED", "true").lower() == "true"
-
-if ENVIRONMENT == "production":
-    allowed_origins = [o.strip() for o in ALLOWED_ORIGINS_ENV.split(",") if o.strip()]
-    if not allowed_origins:
-        allowed_origins = ["https://web.telegram.org", "https://t.me"]
-        logger.warning("⚠️ ALLOWED_ORIGINS not set, using defaults")
-else:
-    allowed_origins = ["*"]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "HEAD", "DELETE"],
-    allow_headers=["Content-Type", "X-Telegram-Init-Data"],
-)
-
-# =====================================================================
-# ✅ DB Error Handler Middleware
-# =====================================================================
-@app.middleware("http")
-async def db_error_handler(request: Request, call_next):
-    try:
-        response = await call_next(request)
-        return response
-    except HTTPException:
-        raise
-    except (OperationalError, DBAPIError, InterfaceError) as e:
-        logger.error(f"❌ DB Error in {request.url.path}: {e}")
-        return JSONResponse(
-            status_code=503,
-            content={"detail": "ዳታቤዙ ግንኙነት ተቋርጧል — እባክዎ እንደገና ይሞክሩ"}
-        )
-    except Exception as e:
-        logger.exception(f"❌ Unhandled error in {request.url.path}: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"detail": f"የውስጥ ስህተት: {str(e)[:150]}"}
-        )
-
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-SUPER_ADMIN_ID = os.getenv("ADMIN_ID", "")
-SUPER_ADMIN_USERNAME = os.getenv("SUPER_ADMIN_USERNAME", "Super Admin")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://mybingobot-1.onrender.com")
-
-try:
-    SUPER_ADMIN_CHAT_ID = int(SUPER_ADMIN_ID) if SUPER_ADMIN_ID else None
-except (ValueError, TypeError):
-    SUPER_ADMIN_CHAT_ID = None
-    logger.error(f"⚠️ SUPER_ADMIN_ID is not a valid integer: {SUPER_ADMIN_ID}")
-
-# =====================================================================
-# ✅ ቋሚ እሴቶች (Fallback defaults — settings table ካልተገኘ)
-# =====================================================================
-ENGINE_LOCK_ID = 987654321
-GAME_CREATE_LOCK_ID = 987654322
-BOT_POLLING_LOCK_ID = 987654323
-WAITING_TIMEOUT_MINUTES = 30
-DRAW_INTERVAL_SECONDS = 5
-MAX_NUMBERS = 75
-MIN_DEPOSIT = 10
-MAX_DEPOSIT = 50000
-MIN_WITHDRAWAL = Decimal("50.00")
-MAX_WITHDRAWAL = Decimal("50000.00")
-MIN_CARDS_TO_START = 2
-
-REQUIRED_TABLES = {
-    "users", "games", "cards", "transactions",
-    "audit_logs", "ledger_entries",
-    "withdrawals", "admin_users", "player_notes", "fraud_flags",
-    "settings",
-}
-
-if not BOT_TOKEN:
-    logger.warning("⚠️ TELEGRAM_BOT_TOKEN is not set!")
-if not SUPER_ADMIN_ID:
-    logger.warning("⚠️ ADMIN_ID is not set!")
-
-logger.info(f"🌍 ENV: {ENVIRONMENT} | MIN_CARDS: {MIN_CARDS_TO_START}")
-
-# =====================================================================
-# ✅ Telegram Bot
-# =====================================================================
-bot = telebot.TeleBot(BOT_TOKEN) if BOT_TOKEN else None
-
-if bot:
-    @bot.message_handler(commands=['start'])
-    def send_welcome(message):
-        try:
-            markup = types.InlineKeyboardMarkup()
-            web_app = types.WebAppInfo(url=WEBAPP_URL)
-            btn = types.InlineKeyboardButton("🎮 ጨዋታውን ክፈት", web_app=web_app)
-            markup.add(btn)
-            bot.reply_to(
-                message,
-                "ሰላም! የቢንጎ ጨዋታ ቦት እንኳን ደህና መጣህ/ሽ! 🎉\n\n"
-                "ጨዋታውን ለመጀመር ከታች ያለውን ቁልፍ ተጭነው/ቺው።",
-                reply_markup=markup
-            )
-        except Exception as e:
-            logger.error(f"send_welcome error: {e}")
-            bot.reply_to(message, "ሰላም! እባክዎ እንደገና ይሞክሩ።")
-
-
-def run_bot():
-    if not bot or not BOT_POLLING_ENABLED:
-        logger.warning("⚠️ Bot not started: BOT_TOKEN or POLLING_ENABLED is false")
-        return
-
-    while True:
-        dedicated_conn = None
-        got_lock = False
-        try:
-            dedicated_conn = engine.raw_connection()
-            cursor = dedicated_conn.cursor()
-            cursor.execute("SELECT pg_try_advisory_lock(%s)", (BOT_POLLING_LOCK_ID,))
-            got_lock = cursor.fetchone()[0]
-            cursor.close()
-
-            if not got_lock:
-                logger.info("ℹ️ Bot polling skipped (lock held), retrying in 30s...")
-                time.sleep(30)
-                continue
-
-            logger.info("✅ Bot polling started")
-            bot.polling(non_stop=True, timeout=30)
-
-        except Exception as e:
-            logger.error(f"❌ Bot polling error: {e}")
-            time.sleep(10)
-        finally:
-            if dedicated_conn:
-                try:
-                    if got_lock:
-                        cursor = dedicated_conn.cursor()
-                        cursor.execute("SELECT pg_advisory_unlock(%s)", (BOT_POLLING_LOCK_ID,))
-                        dedicated_conn.commit()
-                        cursor.close()
-                except Exception as e:
-                    logger.error(f"Bot unlock error: {e}")
-                finally:
-                    try:
-                        dedicated_conn.close()
-                    except Exception:
-                        pass
-            time.sleep(5)
-
-
-def cleanup_feedback_limits():
-    """✅ Periodic cleanup of stale rate limit entries"""
-    while True:
-        try:
-            time.sleep(3600)  # 1 hour
-            now = time.time()
-            dead_users = []
-            for user_id, timestamps in list(_feedback_rate_limit.items()):
-                timestamps[:] = [t for t in timestamps if now - t < 60]
-                if not timestamps:
-                    dead_users.append(user_id)
-            for user_id in dead_users:
-                del _feedback_rate_limit[user_id]
-            if dead_users:
-                logger.info(f"🧹 Cleaned {len(dead_users)} stale rate limit entries")
-        except Exception as e:
-            logger.error(f"Cleanup error: {e}")
-
-
-# =====================================================================
-# ✅ Settings Helpers (v9.2)
-# =====================================================================
-def get_setting(db: Session, key: str, default=None):
-    """የቅንብር ዋጋ ከDB ያነባል (cache ይጠቀማል)"""
-    global _settings_cache, _settings_cache_time
-    now = time.time()
-
-    if now - _settings_cache_time > SETTINGS_CACHE_TTL:
-        try:
-            settings = db.query(models.Setting).all()
-            _settings_cache = {s.key: (s.value, s.value_type) for s in settings}
-            _settings_cache_time = now
-        except Exception as e:
-            logger.error(f"Settings cache error: {e}")
-
-    if key in _settings_cache:
-        value, vtype = _settings_cache[key]
-        try:
-            if vtype == "int":
-                return int(value)
-            elif vtype == "decimal":
-                return Decimal(value)
-            elif vtype == "bool":
-                return value.lower() == "true"
-            else:
-                return value
-        except (ValueError, TypeError):
-            return default
-    return default
-
-
-def set_setting(db: Session, key: str, value, value_type: str, admin_id: str = None):
-    """የቅንብር ዋጋ ያስቀምጣል"""
-    global _settings_cache, _settings_cache_time
-
-    setting = db.query(models.Setting).filter(models.Setting.key == key).first()
-    if setting:
-        setting.value = str(value)
-        setting.value_type = value_type
-        setting.updated_at = datetime.now(timezone.utc)
-        setting.updated_by = admin_id
-    else:
-        setting = models.Setting(
-            key=key, value=str(value), value_type=value_type,
-            updated_at=datetime.now(timezone.utc), updated_by=admin_id
-        )
-        db.add(setting)
-
-    _settings_cache[key] = (str(value), value_type)
-    _settings_cache_time = time.time()
-    return setting
-
-
-def ensure_default_settings(db: Session):
-    """የነባሪ ቅንብሮች መኖራቸውን ያረጋግጣል"""
-    defaults = [
-        ("card_price", "10", "decimal", "የካርድ ዋጋ (ብር)"),
-        ("min_cards_to_start", "2", "int", "ዝቅተኛ ካርድ ቁጥር"),
-        ("draw_interval_seconds", "5", "int", "የጥሪ ክፍተት (ሰከንድ)"),
-        ("jackpot_percent", "100", "int", "የጃክፖት %"),
-        ("min_deposit", "10", "int", "ዝቅተኛ Deposit (ብር)"),
-        ("min_withdrawal", "50", "int", "ዝቅተኛ Withdrawal (ብር)"),
-    ]
-    for key, value, vtype, desc in defaults:
-        existing = db.query(models.Setting).filter(models.Setting.key == key).first()
-        if not existing:
-            db.add(models.Setting(
-                key=key, value=value, value_type=vtype,
-                description=desc, updated_by="system"
-            ))
-    db.commit()
-    logger.info("✅ Default settings ensured")
-
-
-# =====================================================================
-# ✅ Helper ተግባሮች
-# =====================================================================
-def ensure_super_admin_exists(db: Session):
-    if not SUPER_ADMIN_ID:
-        return None
-    admin = db.query(models.AdminUser).filter(
-        models.AdminUser.telegram_id == SUPER_ADMIN_ID
-    ).first()
-    if not admin:
-        admin = models.AdminUser(
-            telegram_id=SUPER_ADMIN_ID,
-            display_name=SUPER_ADMIN_USERNAME,
-            role="super_admin",
-            is_active=True
-        )
-        db.add(admin)
-        db.commit()
-        db.refresh(admin)
-        logger.info(f"✅ Super Admin created: {SUPER_ADMIN_ID}")
-    return admin
-
-
-def add_ledger(db, user, entry_type, amount, ref_type=None, ref_id=None, notes=None):
-    entry = models.LedgerEntry(
-        user_id=user.id,
-        entry_type=entry_type,
-        amount=amount,
-        balance_after=user.balance,
-        reference_type=ref_type if ref_type else "system",
-        reference_id=str(ref_id) if ref_id is not None else "auto",
-        notes=notes,
-    )
-    db.add(entry)
-    return entry
-
-
-def lock_user(db, user_id):
-    return db.query(models.User).filter(models.User.id == user_id).with_for_update().first()
-
-
-def lock_game(db, game_id):
-    return db.query(models.Game).filter(models.Game.id == game_id).with_for_update().first()
-
-
-def safe_db_execute(db: Session, retries: int = 20):
-    for attempt in range(retries):
-        try:
-            db.execute(text("SELECT 1"))
-            return True
-        except (OperationalError, DBAPIError, InterfaceError) as e:
-            logger.warning(f"DB ping attempt {attempt + 1} failed: {e}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            if attempt < retries - 1:
-                time.sleep(5)
-            else:
-                return False
-    return False
-
-
-# =====================================================================
-# ✅ Bingo Card Validation
-# =====================================================================
-def validate_bingo_card(nums: List[int]) -> tuple:
-    if not isinstance(nums, list) or len(nums) != 25:
-        return (False, "invalid_length")
-    if nums[12] != 0:
-        return (False, "center_not_free")
-    column_ranges = [(1, 15), (16, 30), (31, 45), (46, 60), (61, 75)]
-    for r in range(5):
-        for c in range(5):
-            i = r * 5 + c
-            if i == 12:
-                continue
-            n = nums[i]
-            if type(n) is not int:
-                return (False, f"non_integer_at_{i}")
-            if n == 0:
-                return (False, f"zero_at_{i}")
-            low, high = column_ranges[c]
-            if not (low <= n <= high):
-                return (False, f"out_of_range_at_{i}")
-    non_zero = [n for i, n in enumerate(nums) if i != 12]
-    if len(non_zero) != len(set(non_zero)):
-        return (False, "duplicate_numbers")
-    return (True, None)
-
-
-def check_card_winner(nums: List[int], called_set: set) -> bool:
-    is_valid, _ = validate_bingo_card(nums)
-    if not is_valid:
-        return False
-    grid = [nums[i * 5:(i + 1) * 5] for i in range(5)]
-    grid[2][2] = 0
-    if any(all(grid[r][c] == 0 or grid[r][c] in called_set for c in range(5)) for r in range(5)):
-        return True
-    if any(all(grid[r][c] == 0 or grid[r][c] in called_set for r in range(5)) for c in range(5)):
-        return True
-    if all(grid[i][i] == 0 or grid[i][i] in called_set for i in range(5)):
-        return True
-    if all(grid[i][4 - i] == 0 or grid[i][4 - i] in called_set for i in range(5)):
-        return True
-    return False
-
-
-def parse_called_numbers(called_str: Optional[str]) -> Optional[set]:
-    if called_str is None or called_str.strip() == "":
-        return set()
-    parts = called_str.split(",")
-    called = set()
-    try:
-        for part in parts:
-            part = part.strip()
-            if not part:
-                return None
-            n = int(part)
-            if str(n) != part:
-                return None
-            if not 1 <= n <= MAX_NUMBERS:
-                return None
-            if n in called:
-                return None
-            called.add(n)
-    except (ValueError, TypeError):
-        return None
-    return called
-
-
-# =====================================================================
-# ✅ Authentication
-# =====================================================================
-async def get_current_user(
-    x_telegram_init_data: str = Header(None),
-    db: Session = Depends(get_db)
-):
-    if not BOT_TOKEN:
-        raise HTTPException(status_code=503, detail="የቦት ቶከን አልተዋቀረም")
-    if not x_telegram_init_data:
-        raise HTTPException(status_code=401, detail="የማንነት ማረጋገጫ የለም")
-    tg_user = verify_telegram_init_data(x_telegram_init_data, BOT_TOKEN)
-    if not tg_user:
-        raise HTTPException(status_code=401, detail="የተሳሳተ ማረጋገጫ")
-    tg_id = str(tg_user.get("id"))
-    user = db.query(models.User).filter(models.User.telegram_id == tg_id).first()
-    if not user:
-        try:
-            user = models.User(
-                telegram_id=tg_id,
-                username=tg_user.get("username"),
-                first_name=tg_user.get("first_name"),
-                last_name=tg_user.get("last_name"),
-                balance=Decimal("0.00")
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-        except IntegrityError:
-            db.rollback()
-            user = db.query(models.User).filter(models.User.telegram_id == tg_id).first()
-            if not user:
-                raise HTTPException(status_code=500, detail="የተጠቃሚ ፍጠራ ስህተት")
-    if user.is_banned:
-        raise HTTPException(status_code=403, detail="አካውንትዎ ታግዷል")
-
-    try:
-        user.last_active = datetime.now(timezone.utc)
-        db.commit()
-    except Exception:
-        db.rollback()
-
-    return user
-
-
-async def require_admin(
-    user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    admin = get_admin_user(db, user.telegram_id)
-    if not admin and user.telegram_id == SUPER_ADMIN_ID:
-        ensure_super_admin_exists(db)
-        admin = get_admin_user(db, user.telegram_id)
-    if not admin:
-        raise HTTPException(status_code=403, detail="የAdmin ፈቃድ የለዎትም")
-    try:
-        admin.last_login = datetime.now(timezone.utc)
-        db.commit()
-    except Exception:
-        db.rollback()
-    return admin
-
-
-# =====================================================================
-# ✅ Request Models
-# =====================================================================
-class DepositRequest(BaseModel):
-    amount: Decimal = Field(..., ge=MIN_DEPOSIT, le=MAX_DEPOSIT,
-                            max_digits=12, decimal_places=2)
-    method: Literal["ቴሌብር", "ሲቢኢ ብር"]
-    reference: str = Field(..., min_length=1, max_length=100)
-
-
-class BuyCardRequest(BaseModel):
-    game_id: int = Field(..., gt=0)
-
-
-class WithdrawalRequest(BaseModel):
-    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
-    method: Literal["ቴሌብር", "ሲቢኢ ብር"]
-    account_number: str = Field(..., min_length=5, max_length=100)
-    account_name: Optional[str] = Field(None, max_length=255)
-
-
-class ApproveWithdrawalRequest(BaseModel):
-    reference: str = Field(..., min_length=1, max_length=100)
-    notes: Optional[str] = None
-
-
-class CreateAdminRequest(BaseModel):
-    telegram_id: str = Field(..., min_length=5, max_length=50)
-    display_name: str = Field(..., min_length=1, max_length=255)
-    role: str = Field(..., pattern="^(sub_admin|finance_admin|moderator|viewer)$")
-    notes: Optional[str] = None
-
-
-class AdjustBalanceRequest(BaseModel):
-    amount: Decimal = Field(..., max_digits=12, decimal_places=2)
-    reason: str = Field(..., min_length=3, max_length=200)
-
-
-class AddPlayerNoteRequest(BaseModel):
-    note: str = Field(..., min_length=1, max_length=1000)
-    is_warning: bool = False
-
-
-class FeedbackRequest(BaseModel):
-    message: str = Field(..., min_length=3, max_length=1000)
-    category: Literal["አስተያየት", "ችግር", "ጥያቄ", "ሀሳብ"] = "አስተያየት"
-
-
-class UpdateSettingsRequest(BaseModel):
-    card_price: Optional[Decimal] = Field(None, ge=1, le=1000)
-    min_cards_to_start: Optional[int] = Field(None, ge=2, le=10)
-    draw_interval_seconds: Optional[int] = Field(None, ge=3, le=10)
-    jackpot_percent: Optional[int] = Field(None, ge=80, le=100)
-    min_deposit: Optional[int] = Field(None, ge=1, le=1000)
-    min_withdrawal: Optional[int] = Field(None, ge=10, le=10000)
-
-
-# =====================================================================
-# ✅ Game Cancellation Helper
-# =====================================================================
-def _cancel_game_with_refund(db, game_id: int):
-    game = lock_game(db, game_id)
-    if not game or game.refunded:
-        return (0, True)
-    cards = db.query(models.Card).filter(
-        models.Card.game_id == game_id,
-        models.Card.refunded == False
-    ).with_for_update().all()
-    refunded_count = 0
-    for card in cards:
-        existing_refund = db.query(models.LedgerEntry).filter(
-            models.LedgerEntry.user_id == card.user_id,
-            models.LedgerEntry.entry_type == "refund",
-            models.LedgerEntry.reference_type == "card",
-            models.LedgerEntry.reference_id == str(card.id)
-        ).first()
-        if existing_refund:
-            if Decimal(str(existing_refund.amount)) != Decimal(str(card.price_paid)):
-                logger.critical(f"Refund mismatch card={card.id}")
-                continue
-            card.refunded = True
-            card.refunded_at = datetime.now(timezone.utc)
-            refunded_count += 1
-            continue
-        nested = db.begin_nested()
-        try:
-            user = lock_user(db, card.user_id)
-            if not user:
-                nested.rollback()
-                continue
-            user.balance = Decimal(str(user.balance)) + card.price_paid
-            add_ledger(db, user, "refund", card.price_paid,
-                       ref_type="card", ref_id=card.id,
-                       notes=f"ጨዋታ #{game_id} ሰረዘ")
-            nested.commit()
-            card.refunded = True
-            card.refunded_at = datetime.now(timezone.utc)
-            refunded_count += 1
-        except IntegrityError:
-            nested.rollback()
-            recheck = db.query(models.LedgerEntry).filter(
-                models.LedgerEntry.user_id == card.user_id,
-                models.LedgerEntry.entry_type == "refund",
-                models.LedgerEntry.reference_type == "card",
-                models.LedgerEntry.reference_id == str(card.id)
-            ).first()
-            if recheck:
-                if Decimal(str(recheck.amount)) != Decimal(str(card.price_paid)):
-                    continue
-                card.refunded = True
-                card.refunded_at = datetime.now(timezone.utc)
-                refunded_count += 1
-        except Exception as e:
-            nested.rollback()
-            logger.error(f"Refund error card {card.id}: {e}")
-    total_cards = db.query(models.Card).filter(models.Card.game_id == game_id).count()
-    refunded_total = db.query(models.Card).filter(
-        models.Card.game_id == game_id, models.Card.refunded == True
-    ).count()
-    is_complete = (total_cards == 0) or (refunded_total == total_cards)
-    if is_complete:
-        game.refunded = True
-        game.status = "cancelled"
-        game.finished_at = datetime.now(timezone.utc)
-    return (refunded_count, is_complete)
-
-
-# =====================================================================
-# ✅ BASIC ROUTES
-# =====================================================================
-@app.get("/")
-def read_root():
-    try:
-        return FileResponse("templates/index.html")
-    except Exception as e:
-        logger.error(f"Template not found: {e}")
-        return JSONResponse(status_code=404, content={"detail": "Page not found"})
-
-
-@app.get("/api/status")
-def api_status():
-    return {"message": "የቢንጎ ጨዋታ ጀርባ ስርዓት እየሰራ ነው!"}
-
-
-@app.api_route("/api/health", methods=["GET", "HEAD"])
-def health_check():
-    try:
-        db = SessionLocal()
-        db.execute(text("SELECT 1"))
-        db.close()
-        return {"status": "healthy", "database": "connected"}
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return JSONResponse(status_code=503,
-                            content={"status": "unhealthy", "error": str(e)})
-
-
-# =====================================================================
-# ✅ GAME ENDPOINTS
-# =====================================================================
-@app.get("/api/game/current/state")
-def get_or_create_current_game(db: Session = Depends(get_db)):
-    if not safe_db_execute(db, retries=15):
-        logger.error("Cannot reach database in get_or_create_current_game")
-        raise HTTPException(
-            status_code=503,
-            detail="ዳታቤዙ ግንኙነት ተቋርጧል — እባክዎ እንደገና ይሞክሩ"
-        )
-
-    try:
-        db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": GAME_CREATE_LOCK_ID})
-
-        game = db.query(models.Game).filter(
-            models.Game.status.in_(["waiting", "playing"])
-        ).order_by(models.Game.id.desc()).first()
-
-        if game and game.status == "waiting" and game.created_at:
-            if datetime.now(timezone.utc) - game.created_at > timedelta(minutes=WAITING_TIMEOUT_MINUTES):
-                _, is_complete = _cancel_game_with_refund(db, game.id)
-                if not is_complete:
-                    raise HTTPException(status_code=503, detail="የቀድሞ ጨዋታ ገንዘብ መመለስ አልተሟላም።")
-                game = None
-
-        if not game:
-            prev_game = db.query(models.Game).filter(
-                models.Game.rollover_jackpot > 0,
-                models.Game.status == "finished"
-            ).order_by(models.Game.id.desc()).with_for_update().first()
-
-            initial_jackpot = Decimal("0.00")
-            rollover_received = Decimal("0.00")
-            if prev_game and prev_game.rollover_jackpot > 0:
-                initial_jackpot = prev_game.rollover_jackpot
-                rollover_received = prev_game.rollover_jackpot
-                prev_game.rollover_jackpot = Decimal("0.00")
-                prev_game.rollover_transferred = True
-
-            # ✅ Read card_price from settings
-            card_price = get_setting(db, "card_price", Decimal("10.00"))
-
-            game = models.Game(
-                status="waiting",
-                jackpot=initial_jackpot,
-                original_jackpot=initial_jackpot,
-                rollover_received=rollover_received,
-                card_price=card_price
-            )
-            db.add(game)
-
-        db.commit()
-        db.refresh(game)
-
-        player_count = db.query(models.Card).filter(models.Card.game_id == game.id).count()
-        return {
-            "id": game.id, "status": game.status,
-            "jackpot": float(game.jackpot or 0),
-            "card_price": float(game.card_price or 10),
-            "call_count": game.call_count,
-            "called_numbers": game.called_numbers or "",
-            "last_number": game.last_number,
-            "players_count": player_count
-        }
-    except HTTPException:
-        raise
-    except (OperationalError, DBAPIError, InterfaceError) as e:
-        logger.error(f"DB error in get_or_create_current_game: {e}")
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        raise HTTPException(
-            status_code=503,
-            detail="ዳታቤዙ ግንኙነት ተቋርጧል — እባክዎ እንደገና ይሞክሩ"
-        )
-
-
-@app.get("/api/game/{game_id}")
-def get_game_state(game_id: int, db: Session = Depends(get_db)):
-    game = db.query(models.Game).filter(models.Game.id == game_id).first()
-    if not game:
-        return {"error": "ጨዋታው አልተገኘም"}
-    player_count = db.query(models.Card).filter(models.Card.game_id == game_id).count()
-    return {
-        "id": game.id, "status": game.status,
-        "jackpot": float(game.jackpot or 0),
-        "card_price": float(game.card_price or 10),
-        "call_count": game.call_count,
-        "called_numbers": game.called_numbers or "",
-        "last_number": game.last_number,
-        "players_count": player_count,
-        "winner_id": game.winner_id
-    }
-
-
-@app.get("/api/me")
-def get_me(user: models.User = Depends(get_current_user),
-           db: Session = Depends(get_db)):
-    admin = get_admin_user(db, user.telegram_id)
-    return {
-        "id": user.id,
-        "telegram_id": user.telegram_id,
-        "username": user.username,
-        "first_name": user.first_name,
-        "balance": float(user.balance),
-        "is_admin": bool(admin),
-        "is_super_admin": bool(admin and is_super_admin(admin))
-    }
-
-
-@app.get("/api/my_card/{game_id}")
-def get_my_card(game_id: int,
-                user: models.User = Depends(get_current_user),
-                db: Session = Depends(get_db)):
-    card = db.query(models.Card).filter(
-        models.Card.user_id == user.id,
-        models.Card.game_id == game_id
-    ).first()
-    if not card:
-        return {"has_card": False}
-    return {"has_card": True, "card_id": card.id,
-            "numbers": card.numbers, "is_winner": card.is_winner}
-
-
-@app.post("/api/deposit")
-def request_deposit(req: DepositRequest,
-                    user: models.User = Depends(get_current_user),
-                    db: Session = Depends(get_db)):
-    clean_reference = req.reference.strip()
-    if not clean_reference:
-        raise HTTPException(status_code=422, detail="የደረሰኝ ቁጥሩ ባዶ መሆን የለበትም")
-    
-    new_trans = models.Transaction(
-        user_id=user.id, amount=Decimal(str(req.amount)),
-        method=req.method, reference=clean_reference, status="pending"
-    )
-    db.add(new_trans)
-    try:
-        db.commit()
-        db.refresh(new_trans)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="ይህ የደረሰኝ ቁጥር ተጠቅሟል!")
-
-    # =========================================================
-    # ✅ አዲስ የተጨመረ: ለAdmin የቴሌግራም ማሳወቂያ መላክ
-    # =========================================================
-    if bot and SUPER_ADMIN_CHAT_ID:
-        try:
-            safe_name = escape_markdown(user.first_name or 'ያልታወቀ')
-            safe_username = escape_markdown(user.username or 'N/A')
-            
-            msg_text = (
-                f"💰 *አዲስ የDeposit ጥያቄ!*\n\n"
-                f"👤 *ተጠቃሚ:* {safe_name} (@{safe_username})\n"
-                f"🆔 *መታወቂያ:* `{user.telegram_id}`\n"
-                f"💵 *መጠን:* *{req.amount} ብር*\n"
-                f"📱 *መንገድ:* {req.method}\n"
-                f"🧾 *ደረሰኝ:* `{clean_reference}`\n\n"
-                f"👉 እባክዎ ወደ Admin Panel ገብተው ያጽድቁት።"
-            )
-            
-            try:
-                bot.send_message(SUPER_ADMIN_CHAT_ID, msg_text, parse_mode="Markdown")
-            except Exception as md_err:
-                logger.warning(f"Markdown failed for deposit notification, trying plain text: {md_err}")
-                plain_text = msg_text.replace('*', '').replace('`', '').replace('_', '')
-                bot.send_message(SUPER_ADMIN_CHAT_ID, plain_text)
-                
-        except Exception as tg_err:
-            logger.error(f"Failed to send deposit notification to admin: {tg_err}")
-
-    return {"message": "የክፍያ ጥያቄዎ ተልኳል። አስተዳዳሪው ካጸደቀ በኋላ ገንዘቡ ወደ አካውንትዎ ይገባል።", "transaction_id": new_trans.id}
-
-
 @app.post("/api/buy_card")
 def buy_card(req: BuyCardRequest,
              user: models.User = Depends(get_current_user),
@@ -903,7 +53,6 @@ def buy_card(req: BuyCardRequest,
         raise HTTPException(status_code=500, detail="የውስጥ ስህተት")
     total_cards = db.query(models.Card).filter(models.Card.game_id == req.game_id).count()
 
-    # ✅ Read min_cards_to_start from settings
     min_cards = get_setting(db, "min_cards_to_start", 2)
     game.jackpot = (game.jackpot or Decimal("0.00")) + card_price
     if total_cards >= min_cards and game.status == "waiting":
@@ -1129,12 +278,11 @@ def get_admin_stats(admin: models.AdminUser = Depends(require_admin),
 
 
 # =====================================================================
-# ✅ ADMIN: Settings (v9.2 አዲስ)
+# ✅ ADMIN: Settings
 # =====================================================================
 @app.get("/api/admin/settings")
 def get_settings_endpoint(admin: models.AdminUser = Depends(require_admin),
                           db: Session = Depends(get_db)):
-    """ሁሉንም ቅንብሮች ይመልሳል"""
     if not (is_super_admin(admin) or has_permission(admin, "control_games")):
         raise HTTPException(status_code=403, detail="ፈቃድ የለዎትም")
 
@@ -1159,7 +307,6 @@ def get_settings_endpoint(admin: models.AdminUser = Depends(require_admin),
 def update_settings_endpoint(req: UpdateSettingsRequest,
                              admin: models.AdminUser = Depends(require_admin),
                              db: Session = Depends(get_db)):
-    """ቅንብሮችን ያስተካክላል"""
     if not (is_super_admin(admin) or has_permission(admin, "control_games")):
         raise HTTPException(status_code=403, detail="ፈቃድ የለዎትም")
 
@@ -1783,12 +930,11 @@ def reconcile(admin: models.AdminUser = Depends(require_admin),
 
 
 # =====================================================================
-# ✅ BINGO ENGINE LOOP (v9.2 — Dynamic draw interval)
+# ✅ BINGO ENGINE LOOP
 # =====================================================================
 def bingo_engine_loop():
     while True:
         try:
-            # ✅ Read draw interval from settings
             db_tmp = SessionLocal()
             try:
                 draw_interval = get_setting(db_tmp, "draw_interval_seconds", 5)
@@ -1865,7 +1011,6 @@ def process_engine_tick(db):
         if existing_payout and not game.payout_completed:
             logger.critical(f"Game {game.id} FROZEN.")
             continue
-        # ✅ Use dynamic interval from settings
         draw_interval = get_setting(db, "draw_interval_seconds", 5)
         if game.last_drawn_at:
             elapsed = (datetime.now(timezone.utc) - game.last_drawn_at).total_seconds()
@@ -1971,7 +1116,6 @@ def check_winners(db, game, called_set):
 def startup_event():
     logger.info("⏳ ሰርቨሩ በመነሳት ላይ ነው...")
 
-    # ✅ Ensure default settings exist
     try:
         db_init = SessionLocal()
         try:
@@ -1988,7 +1132,6 @@ def startup_event():
     threading.Thread(target=bingo_engine_loop, daemon=True).start()
     logger.info("✅ Bingo engine started.")
 
-    # ✅ Feedback rate limit cleanup
     threading.Thread(target=cleanup_feedback_limits, daemon=True).start()
     logger.info("✅ Feedback cleanup thread started")
 
@@ -2003,3 +1146,629 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     logger.info(f"🚀 Starting server on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
+    """
+=====================================================================
+✅ የBingo ጨዋታ ጀርባ ስርዓት (main.py) - v9.3 FINAL PRODUCTION
+=====================================================================
+✅ Deposit Request Telegram Notification to Admin (NEW)
+=====================================================================
+"""
+from fastapi import FastAPI, Depends, HTTPException, Header, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from sqlalchemy.orm import Session
+from sqlalchemy import text, inspect, func
+from sqlalchemy.exc import IntegrityError, OperationalError, DBAPIError, InterfaceError
+from pydantic import BaseModel, Field
+from decimal import Decimal, ROUND_DOWN
+from typing import Literal, List, Optional
+import os
+import uuid
+import secrets
+import telebot
+from telebot import types
+
+# ✅ Safe escape_markdown import (with fallback)
+try:
+    from telebot.formatting import escape_markdown
+except ImportError:
+    def escape_markdown(text: str) -> str:
+        if not isinstance(text, str):
+            text = str(text)
+        escape_chars = r'\_*[]()~`>#+-=|{}.!'
+        return ''.join('\\' + c if c in escape_chars else c for c in text)
+
+import threading
+import time
+import logging
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+
+from database import engine, get_db, Base, SessionLocal
+from auth import verify_telegram_init_data
+from admin_auth import (
+    get_admin_user, has_permission, is_super_admin,
+    require_permission, log_admin_action,
+    ALL_PERMISSIONS, ROLE_PERMISSIONS, get_admin_permissions,
+)
+import models
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+secure_random = secrets.SystemRandom()
+
+# ✅ Feedback Rate Limiting
+_feedback_rate_limit = defaultdict(list)
+
+# ✅ Settings Cache (60s TTL)
+_settings_cache = {}
+_settings_cache_time = 0
+SETTINGS_CACHE_TTL = 60
+
+app = FastAPI(title="Bingo Game API")
+
+# =====================================================================
+# ✅ የአካባቢ ቅንብሮች
+# =====================================================================
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
+ALLOWED_ORIGINS_ENV = os.getenv("ALLOWED_ORIGINS", "")
+BOT_POLLING_ENABLED = os.getenv("BOT_POLLING_ENABLED", "true").lower() == "true"
+
+if ENVIRONMENT == "production":
+    allowed_origins = [o.strip() for o in ALLOWED_ORIGINS_ENV.split(",") if o.strip()]
+    if not allowed_origins:
+        allowed_origins = ["https://web.telegram.org", "https://t.me"]
+        logger.warning("⚠️ ALLOWED_ORIGINS not set, using defaults")
+else:
+    allowed_origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "HEAD", "DELETE"],
+    allow_headers=["Content-Type", "X-Telegram-Init-Data"],
+)
+
+# =====================================================================
+# ✅ DB Error Handler Middleware
+# =====================================================================
+@app.middleware("http")
+async def db_error_handler(request: Request, call_next):
+    try:
+        response = await call_next(request)
+        return response
+    except HTTPException:
+        raise
+    except (OperationalError, DBAPIError, InterfaceError) as e:
+        logger.error(f"❌ DB Error in {request.url.path}: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "ዳታቤዙ ግንኙነት ተቋርጧል — እባክዎ እንደገና ይሞክሩ"}
+        )
+    except Exception as e:
+        logger.exception(f"❌ Unhandled error in {request.url.path}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"የውስጥ ስህተት: {str(e)[:150]}"}
+        )
+
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+SUPER_ADMIN_ID = os.getenv("ADMIN_ID", "")
+SUPER_ADMIN_USERNAME = os.getenv("SUPER_ADMIN_USERNAME", "Super Admin")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://mybingobot-1.onrender.com")
+
+try:
+    SUPER_ADMIN_CHAT_ID = int(SUPER_ADMIN_ID) if SUPER_ADMIN_ID else None
+except (ValueError, TypeError):
+    SUPER_ADMIN_CHAT_ID = None
+    logger.error(f"⚠️ SUPER_ADMIN_ID is not a valid integer: {SUPER_ADMIN_ID}")
+
+# =====================================================================
+# ✅ ቋሚ እሴቶች (Fallback defaults — settings table ካልተገኘ)
+# =====================================================================
+ENGINE_LOCK_ID = 987654321
+GAME_CREATE_LOCK_ID = 987654322
+BOT_POLLING_LOCK_ID = 987654323
+WAITING_TIMEOUT_MINUTES = 30
+DRAW_INTERVAL_SECONDS = 5
+MAX_NUMBERS = 75
+MIN_DEPOSIT = 10
+MAX_DEPOSIT = 50000
+MIN_WITHDRAWAL = Decimal("50.00")
+MAX_WITHDRAWAL = Decimal("50000.00")
+MIN_CARDS_TO_START = 2
+
+REQUIRED_TABLES = {
+    "users", "games", "cards", "transactions",
+    "audit_logs", "ledger_entries",
+    "withdrawals", "admin_users", "player_notes", "fraud_flags",
+    "settings",
+}
+
+if not BOT_TOKEN:
+    logger.warning("⚠️ TELEGRAM_BOT_TOKEN is not set!")
+if not SUPER_ADMIN_ID:
+    logger.warning("⚠️ ADMIN_ID is not set!")
+
+logger.info(f"🌍 ENV: {ENVIRONMENT} | MIN_CARDS: {MIN_CARDS_TO_START}")
+
+# =====================================================================
+# ✅ Telegram Bot
+# =====================================================================
+bot = telebot.TeleBot(BOT_TOKEN) if BOT_TOKEN else None
+
+if bot:
+    @bot.message_handler(commands=['start'])
+    def send_welcome(message):
+        try:
+            markup = types.InlineKeyboardMarkup()
+            web_app = types.WebAppInfo(url=WEBAPP_URL)
+            btn = types.InlineKeyboardButton("🎮 ጨዋታውን ክፈት", web_app=web_app)
+            markup.add(btn)
+            bot.reply_to(
+                message,
+                "ሰላም! የቢንጎ ጨዋታ ቦት እንኳን ደህና መጣህ/ሽ! 🎉\n\n"
+                "ጨዋታውን ለመጀመር ከታች ያለውን ቁልፍ ተጭነው/ቺው።",
+                reply_markup=markup
+            )
+        except Exception as e:
+            logger.error(f"send_welcome error: {e}")
+            bot.reply_to(message, "ሰላም! እባክዎ እንደገና ይሞክሩ።")
+
+
+def run_bot():
+    if not bot or not BOT_POLLING_ENABLED:
+        logger.warning("⚠️ Bot not started: BOT_TOKEN or POLLING_ENABLED is false")
+        return
+
+    while True:
+        dedicated_conn = None
+        got_lock = False
+        try:
+            dedicated_conn = engine.raw_connection()
+            cursor = dedicated_conn.cursor()
+            cursor.execute("SELECT pg_try_advisory_lock(%s)", (BOT_POLLING_LOCK_ID,))
+            got_lock = cursor.fetchone()[0]
+            cursor.close()
+
+            if not got_lock:
+                logger.info("ℹ️ Bot polling skipped (lock held), retrying in 30s...")
+                time.sleep(30)
+                continue
+
+            logger.info("✅ Bot polling started")
+            bot.polling(non_stop=True, timeout=30)
+
+        except Exception as e:
+            logger.error(f"❌ Bot polling error: {e}")
+            time.sleep(10)
+        finally:
+            if dedicated_conn:
+                try:
+                    if got_lock:
+                        cursor = dedicated_conn.cursor()
+                        cursor.execute("SELECT pg_advisory_unlock(%s)", (BOT_POLLING_LOCK_ID,))
+                        dedicated_conn.commit()
+                        cursor.close()
+                except Exception as e:
+                    logger.error(f"Bot unlock error: {e}")
+                finally:
+                    try:
+                        dedicated_conn.close()
+                    except Exception:
+                        pass
+            time.sleep(5)
+
+
+def cleanup_feedback_limits():
+    """✅ Periodic cleanup of stale rate limit entries"""
+    while True:
+        try:
+            time.sleep(3600)  # 1 hour
+            now = time.time()
+            dead_users = []
+            for user_id, timestamps in list(_feedback_rate_limit.items()):
+                timestamps[:] = [t for t in timestamps if now - t < 60]
+                if not timestamps:
+                    dead_users.append(user_id)
+            for user_id in dead_users:
+                del _feedback_rate_limit[user_id]
+            if dead_users:
+                logger.info(f"🧹 Cleaned {len(dead_users)} stale rate limit entries")
+        except Exception as e:
+            logger.error(f"Cleanup error: {e}")
+
+
+# =====================================================================
+# ✅ Settings Helpers
+# =====================================================================
+def get_setting(db: Session, key: str, default=None):
+    global _settings_cache, _settings_cache_time
+    now = time.time()
+
+    if now - _settings_cache_time > SETTINGS_CACHE_TTL:
+        try:
+            settings = db.query(models.Setting).all()
+            _settings_cache = {s.key: (s.value, s.value_type) for s in settings}
+            _settings_cache_time = now
+        except Exception as e:
+            logger.error(f"Settings cache error: {e}")
+
+    if key in _settings_cache:
+        value, vtype = _settings_cache[key]
+        try:
+            if vtype == "int":
+                return int(value)
+            elif vtype == "decimal":
+                return Decimal(value)
+            elif vtype == "bool":
+                return value.lower() == "true"
+            else:
+                return value
+        except (ValueError, TypeError):
+            return default
+    return default
+
+
+def set_setting(db: Session, key: str, value, value_type: str, admin_id: str = None):
+    global _settings_cache, _settings_cache_time
+
+    setting = db.query(models.Setting).filter(models.Setting.key == key).first()
+    if setting:
+        setting.value = str(value)
+        setting.value_type = value_type
+        setting.updated_at = datetime.now(timezone.utc)
+        setting.updated_by = admin_id
+    else:
+        setting = models.Setting(
+            key=key, value=str(value), value_type=value_type,
+            updated_at=datetime.now(timezone.utc), updated_by=admin_id
+        )
+        db.add(setting)
+
+    _settings_cache[key] = (str(value), value_type)
+    _settings_cache_time = time.time()
+    return setting
+
+
+def ensure_default_settings(db: Session):
+    defaults = [
+        ("card_price", "10", "decimal", "የካርድ ዋጋ (ብር)"),
+        ("min_cards_to_start", "2", "int", "ዝቅተኛ ካርድ ቁጥር"),
+        ("draw_interval_seconds", "5", "int", "የጥሪ ክፍተት (ሰከንድ)"),
+        ("jackpot_percent", "100", "int", "የጃክፖት %"),
+        ("min_deposit", "10", "int", "ዝቅተኛ Deposit (ብር)"),
+        ("min_withdrawal", "50", "int", "ዝቅተኛ Withdrawal (ብር)"),
+    ]
+    for key, value, vtype, desc in defaults:
+        existing = db.query(models.Setting).filter(models.Setting.key == key).first()
+        if not existing:
+            db.add(models.Setting(
+                key=key, value=value, value_type=vtype,
+                description=desc, updated_by="system"
+            ))
+    db.commit()
+    logger.info("✅ Default settings ensured")
+
+
+# =====================================================================
+# ✅ Helper ተግባሮች
+# =====================================================================
+def ensure_super_admin_exists(db: Session):
+    if not SUPER_ADMIN_ID:
+        return None
+    admin = db.query(models.AdminUser).filter(
+        models.AdminUser.telegram_id == SUPER_ADMIN_ID
+    ).first()
+    if not admin:
+        admin = models.AdminUser(
+            telegram_id=SUPER_ADMIN_ID,
+            display_name=SUPER_ADMIN_USERNAME,
+            role="super_admin",
+            is_active=True
+        )
+        db.add(admin)
+        db.commit()
+        db.refresh(admin)
+        logger.info(f"✅ Super Admin created: {SUPER_ADMIN_ID}")
+    return admin
+
+
+def add_ledger(db, user, entry_type, amount, ref_type=None, ref_id=None, notes=None):
+    entry = models.LedgerEntry(
+        user_id=user.id,
+        entry_type=entry_type,
+        amount=amount,
+        balance_after=user.balance,
+        reference_type=ref_type if ref_type else "system",
+        reference_id=str(ref_id) if ref_id is not None else "auto",
+        notes=notes,
+    )
+    db.add(entry)
+    return entry
+
+
+def lock_user(db, user_id):
+    return db.query(models.User).filter(models.User.id == user_id).with_for_update().first()
+
+
+def lock_game(db, game_id):
+    return db.query(models.Game).filter(models.Game.id == game_id).with_for_update().first()
+
+
+def safe_db_execute(db: Session, retries: int = 20):
+    for attempt in range(retries):
+        try:
+            db.execute(text("SELECT 1"))
+            return True
+        except (OperationalError, DBAPIError, InterfaceError) as e:
+            logger.warning(f"DB ping attempt {attempt + 1} failed: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            if attempt < retries - 1:
+                time.sleep(5)
+            else:
+                return False
+    return False
+
+
+# =====================================================================
+# ✅ Bingo Card Validation
+# =====================================================================
+def validate_bingo_card(nums: List[int]) -> tuple:
+    if not isinstance(nums, list) or len(nums) != 25:
+        return (False, "invalid_length")
+    if nums[12] != 0:
+        return (False, "center_not_free")
+    column_ranges = [(1, 15), (16, 30), (31, 45), (46, 60), (61, 75)]
+    for r in range(5):
+        for c in range(5):
+            i = r * 5 + c
+            if i == 12:
+                continue
+            n = nums[i]
+            if type(n) is not int:
+                return (False, f"non_integer_at_{i}")
+            if n == 0:
+                return (False, f"zero_at_{i}")
+            low, high = column_ranges[c]
+            if not (low <= n <= high):
+                return (False, f"out_of_range_at_{i}")
+    non_zero = [n for i, n in enumerate(nums) if i != 12]
+    if len(non_zero) != len(set(non_zero)):
+        return (False, "duplicate_numbers")
+    return (True, None)
+
+
+def check_card_winner(nums: List[int], called_set: set) -> bool:
+    is_valid, _ = validate_bingo_card(nums)
+    if not is_valid:
+        return False
+    grid = [nums[i * 5:(i + 1) * 5] for i in range(5)]
+    grid[2][2] = 0
+    if any(all(grid[r][c] == 0 or grid[r][c] in called_set for c in range(5)) for r in range(5)):
+        return True
+    if any(all(grid[r][c] == 0 or grid[r][c] in called_set for r in range(5)) for c in range(5)):
+        return True
+    if all(grid[i][i] == 0 or grid[i][i] in called_set for i in range(5)):
+        return True
+    if all(grid[i][4 - i] == 0 or grid[i][4 - i] in called_set for i in range(5)):
+        return True
+    return False
+
+
+def parse_called_numbers(called_str: Optional[str]) -> Optional[set]:
+    if called_str is None or called_str.strip() == "":
+        return set()
+    parts = called_str.split(",")
+    called = set()
+    try:
+        for part in parts:
+            part = part.strip()
+            if not part:
+                return None
+            n = int(part)
+            if str(n) != part:
+                return None
+            if not 1 <= n <= MAX_NUMBERS:
+                return None
+            if n in called:
+                return None
+            called.add(n)
+    except (ValueError, TypeError):
+        return None
+    return called
+
+
+# =====================================================================
+# ✅ Authentication
+# =====================================================================
+async def get_current_user(
+    x_telegram_init_data: str = Header(None),
+    db: Session = Depends(get_db)
+):
+    if not BOT_TOKEN:
+        raise HTTPException(status_code=503, detail="የቦት ቶከን አልተዋቀረም")
+    if not x_telegram_init_data:
+        raise HTTPException(status_code=401, detail="የማንነት ማረጋገጫ የለም")
+    tg_user = verify_telegram_init_data(x_telegram_init_data, BOT_TOKEN)
+    if not tg_user:
+        raise HTTPException(status_code=401, detail="የተሳሳተ ማረጋገጫ")
+    tg_id = str(tg_user.get("id"))
+    user = db.query(models.User).filter(models.User.telegram_id == tg_id).first()
+    if not user:
+        try:
+            user = models.User(
+                telegram_id=tg_id,
+                username=tg_user.get("username"),
+                first_name=tg_user.get("first_name"),
+                last_name=tg_user.get("last_name"),
+                balance=Decimal("0.00")
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        except IntegrityError:
+            db.rollback()
+            user = db.query(models.User).filter(models.User.telegram_id == tg_id).first()
+            if not user:
+                raise HTTPException(status_code=500, detail="የተጠቃሚ ፍጠራ ስህተት")
+    if user.is_banned:
+        raise HTTPException(status_code=403, detail="አካውንትዎ ታግዷል")
+
+    try:
+        user.last_active = datetime.now(timezone.utc)
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    return user
+
+
+async def require_admin(
+    user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    admin = get_admin_user(db, user.telegram_id)
+    if not admin and user.telegram_id == SUPER_ADMIN_ID:
+        ensure_super_admin_exists(db)
+        admin = get_admin_user(db, user.telegram_id)
+    if not admin:
+        raise HTTPException(status_code=403, detail="የAdmin ፈቃድ የለዎትም")
+    try:
+        admin.last_login = datetime.now(timezone.utc)
+        db.commit()
+    except Exception:
+        db.rollback()
+    return admin
+
+
+# =====================================================================
+# ✅ Request Models
+# =====================================================================
+class DepositRequest(BaseModel):
+    amount: Decimal = Field(..., ge=MIN_DEPOSIT, le=MAX_DEPOSIT,
+                            max_digits=12, decimal_places=2)
+    method: Literal["ቴሌብር", "ሲቢኢ ብር"]
+    reference: str = Field(..., min_length=1, max_length=100)
+
+
+class BuyCardRequest(BaseModel):
+    game_id: int = Field(..., gt=0)
+
+
+class WithdrawalRequest(BaseModel):
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
+    method: Literal["ቴሌብር", "ሲቢኢ ብር"]
+    account_number: str = Field(..., min_length=5, max_length=100)
+    account_name: Optional[str] = Field(None, max_length=255)
+
+
+class ApproveWithdrawalRequest(BaseModel):
+    reference: str = Field(..., min_length=1, max_length=100)
+    notes: Optional[str] = None
+
+
+class CreateAdminRequest(BaseModel):
+    telegram_id: str = Field(..., min_length=5, max_length=50)
+    display_name: str = Field(..., min_length=1, max_length=255)
+    role: str = Field(..., pattern="^(sub_admin|finance_admin|moderator|viewer)$")
+    notes: Optional[str] = None
+
+
+class AdjustBalanceRequest(BaseModel):
+    amount: Decimal = Field(..., max_digits=12, decimal_places=2)
+    reason: str = Field(..., min_length=3, max_length=200)
+
+
+class AddPlayerNoteRequest(BaseModel):
+    note: str = Field(..., min_length=1, max_length=1000)
+    is_warning: bool = False
+
+
+class FeedbackRequest(BaseModel):
+    message: str = Field(..., min_length=3, max_length=1000)
+    category: Literal["አስተያየት", "ችግር", "ጥያቄ", "ሀሳብ"] = "አስተያየት"
+
+
+class UpdateSettingsRequest(BaseModel):
+    card_price: Optional[Decimal] = Field(None, ge=1, le=1000)
+    min_cards_to_start: Optional[int] = Field(None, ge=2, le=10)
+    draw_interval_seconds: Optional[int] = Field(None, ge=3, le=10)
+    jackpot_percent: Optional[int] = Field(None, ge=80, le=100)
+    min_deposit: Optional[int] = Field(None, ge=1, le=1000)
+    min_withdrawal: Optional[int] = Field(None, ge=10, le=10000)
+
+
+# =====================================================================
+# ✅ Game Cancellation Helper
+# =====================================================================
+def _cancel_game_with_refund(db, game_id: int):
+    game = lock_game(db, game_id)
+    if not game or game.refunded:
+        return (0, True)
+    cards = db.query(models.Card).filter(
+        models.Card.game_id == game_id,
+        models.Card.refunded == False
+    ).with_for_update().all()
+    refunded_count = 0
+    for card in cards:
+        existing_refund = db.query(models.LedgerEntry).filter(
+            models.LedgerEntry.user_id == card.user_id,
+            models.LedgerEntry.entry_type == "refund",
+            models.LedgerEntry.reference_type == "card",
+            models.LedgerEntry.reference_id == str(card.id)
+        ).first()
+        if existing_refund:
+            if Decimal(str(existing_refund.amount)) != Decimal(str(card.price_paid)):
+                logger.critical(f"Refund mismatch card={card.id}")
+                continue
+            card.refunded = True
+            card.refunded_at = datetime.now(timezone.utc)
+            refunded_count += 1
+            continue
+        nested = db.begin_nested()
+        try:
+            user = lock_user(db, card.user_id)
+            if not user:
+                nested.rollback()
+                continue
+            user.balance = Decimal(str(user.balance)) + card.price_paid
+            add_ledger(db, user, "refund", card.price_paid,
+                       ref_type="card", ref_id=card.id,
+                       notes=f"ጨዋታ #{game_id} ሰረዘ")
+            nested.commit()
+            card.refunded = True
+            card.refunded_at = datetime.now(timezone.utc)
+            refunded_count += 1
+        except IntegrityError:
+            nested.rollback()
+            recheck = db.query(models.LedgerEntry).filter(
+                models.LedgerEntry.user_id == card.user_id,
+                models.LedgerEntry.entry_type == "refund",
+                models.LedgerEntry.reference_type == "card",
+                models.LedgerEntry.reference_id == str(card.id)
+            ).first()
+            if recheck:
+                if Decimal(str(recheck.amount)) != Decimal(str(card.price_paid)):
+                    continue
+                card.refunded = True
+                card.refunded_at = datetime.now(timezone.utc)
+                refunded_count += 1
+        except Exception as e:
+            nested.rollback()
+            logger.error(f"Refund error card {card.id}: {e}")
+    total_cards = db.query(models.Card).filter(models.Card.game_id == game_id).count()
+    refunded_total = db.query(models.Card).filter(
+        models.Card.game_id == game_id, models.Card.refunded == True
+    ).count()
+    is_complete = (total_cards == 0) or (refunded_total == total_cards)
+    if is_complete:
+        game.refunded = True
+        game.status = "cancelled"
+        game.finished_at = datetime.now(timezone.utc)
+    return (refunded_count, is_complete)
