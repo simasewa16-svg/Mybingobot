@@ -1,8 +1,6 @@
 """
 ============================================================
  BingoGame - Enterprise Architecture Database (10x Edition)
- Features: Double-Entry Ledger, Optimistic Locking, Multi-Wallet, 
-           Timezone-Aware, Advanced Constraints, Audit Logging.
 ============================================================
 """
 
@@ -22,7 +20,19 @@ from sqlalchemy.orm import (
 )
 
 # ============================================================
-# 1. DATABASE CONFIGURATION & ENGINE
+# 🚨 1. የእርስዎ መረጃዎች (CONFIGURATION) - እዚህ ጋር ብቻ ይቀይሩ 🚨
+# ============================================================
+
+# 1. የቴሌግራም ቦት ቶከን (ከ BotFather ያገኘኸው)
+BOT_TOKEN = "8962566823:AAHYTr58QBRU85-HkeLb91M_gIOBzaTh7jw" 
+
+# 2. የክፍያ አካውንት ቁጥሮች (ስልክ ቁጥርህን እዚህ አስገባ)
+TELEBIRR_PHONE = "0912345678"  # የቴሌብር ስልክ ቁጥርህ
+CBE_BIRR_PHONE = "0912345678"  # የCBE ብር ስልክ ቁጥርህ
+ADMIN_PHONE = "0912345678"     # የአድሚን ስልክ ቁጥር
+
+# ============================================================
+# 2. DATABASE CONFIGURATION & ENGINE
 # ============================================================
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./bingobot.db")
 
@@ -62,7 +72,7 @@ def generate_uuid():
     return str(uuid.uuid4())
 
 # ============================================================
-# 2. CORE UTILITIES
+# 3. CORE UTILITIES
 # ============================================================
 def get_db():
     db = SessionLocal()
@@ -75,9 +85,8 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     print("✅ ሁሉም ዘመናዊ ሰንጠረዦች በተሳካ ሁኔታ ተፈጥረዋል!")
 
-
 # ============================================================
-# 3. CORE USER & FINANCIAL TABLES
+# 4. CORE USER & FINANCIAL TABLES
 # ============================================================
 
 class User(Base):
@@ -162,7 +171,7 @@ class LedgerEntry(Base):
 
 
 # ============================================================
-# 4. BINGO GAME ENGINE TABLES
+# 5. BINGO GAME ENGINE TABLES
 # ============================================================
 
 class BingoGame(Base):
@@ -219,7 +228,7 @@ class BingoCard(Base):
 
 
 # ============================================================
-# 5. TRANSACTIONS & SUPPORT
+# 6. TRANSACTIONS & SUPPORT
 # ============================================================
 
 class Transaction(Base):
@@ -265,7 +274,7 @@ class SupportTicket(Base):
 
 
 # ============================================================
-# 6. ENGAGEMENT & BONUSES
+# 7. ENGAGEMENT & BONUSES
 # ============================================================
 
 class DailyReward(Base):
@@ -300,7 +309,7 @@ class PromoCode(Base):
 
 
 # ============================================================
-# 7. AUDIT & SYSTEM LOGGING
+# 8. AUDIT & SYSTEM LOGGING
 # ============================================================
 
 class SystemAuditLog(Base):
@@ -317,7 +326,7 @@ class SystemAuditLog(Base):
 
 
 # ============================================================
-# 8. INITIALIZATION
+# 9. INITIALIZATION
 # ============================================================
 if __name__ == "__main__":
     init_db()
