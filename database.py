@@ -1,6 +1,7 @@
 """
 ============================================================
  BingoGame - Enterprise Architecture Database (10x Edition)
+ Features: Security, Webhook Logging, Admin Notifications
 ============================================================
 """
 
@@ -20,19 +21,7 @@ from sqlalchemy.orm import (
 )
 
 # ============================================================
-# 🚨 1. የእርስዎ መረጃዎች (CONFIGURATION) - እዚህ ጋር ብቻ ይቀይሩ 🚨
-# ============================================================
-
-# 1. የቴሌግራም ቦት ቶከን (ከ BotFather ያገኘኸው)
-BOT_TOKEN = "8962566823:AAHYTr58QBRU85-HkeLb91M_gIOBzaTh7jw" 
-
-# 2. የክፍያ አካውንት ቁጥሮች (ስልክ ቁጥርህን እዚህ አስገባ)
-TELEBIRR_PHONE = "0912345678"  # የቴሌብር ስልክ ቁጥርህ
-CBE_BIRR_PHONE = "0912345678"  # የCBE ብር ስልክ ቁጥርህ
-ADMIN_PHONE = "0912345678"     # የአድሚን ስልክ ቁጥር
-
-# ============================================================
-# 2. DATABASE CONFIGURATION & ENGINE
+# 1. DATABASE CONFIGURATION & ENGINE
 # ============================================================
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./bingobot.db")
 
@@ -72,7 +61,7 @@ def generate_uuid():
     return str(uuid.uuid4())
 
 # ============================================================
-# 3. CORE UTILITIES
+# 2. CORE UTILITIES
 # ============================================================
 def get_db():
     db = SessionLocal()
@@ -86,7 +75,7 @@ def init_db():
     print("✅ ሁሉም ዘመናዊ ሰንጠረዦች በተሳካ ሁኔታ ተፈጥረዋል!")
 
 # ============================================================
-# 4. CORE USER & FINANCIAL TABLES
+# 3. CORE USER & FINANCIAL TABLES
 # ============================================================
 
 class User(Base):
@@ -169,9 +158,8 @@ class LedgerEntry(Base):
         CheckConstraint("amount != 0", name="chk_ledger_amount_not_zero"),
     )
 
-
 # ============================================================
-# 5. BINGO GAME ENGINE TABLES
+# 4. BINGO GAME ENGINE TABLES
 # ============================================================
 
 class BingoGame(Base):
@@ -226,9 +214,8 @@ class BingoCard(Base):
         Index("idx_card_user_game", "user_id", "game_id"),
     )
 
-
 # ============================================================
-# 6. TRANSACTIONS & SUPPORT
+# 5. TRANSACTIONS & SUPPORT
 # ============================================================
 
 class Transaction(Base):
@@ -272,9 +259,8 @@ class SupportTicket(Base):
 
     user = relationship("User", back_populates="tickets")
 
-
 # ============================================================
-# 7. ENGAGEMENT & BONUSES
+# 6. ENGAGEMENT & BONUSES
 # ============================================================
 
 class DailyReward(Base):
@@ -307,6 +293,36 @@ class PromoCode(Base):
     expires_at = Column(DateTime(timezone=True))
     is_active = Column(Boolean, default=True)
 
+# ============================================================
+# 7. WEBHOOK & SECURITY LOGS (አዲስ የተጨመሩ)
+# ============================================================
+
+class WebhookLog(Base):
+    """ከ127.0.0.1 (Localhost) ወይም ከክፍያ ጌትዌይ የሚመጡ መልዕክቶችን እና ሊንኮችን ለማጣራት"""
+    __tablename__ = "webhook_logs"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    source_ip = Column(String(45), nullable=False, index=True) # ለምሳሌ 127.0.0.1
+    payload = Column(JSON, nullable=False) # የመጣው መልዕክት ሙሉ መረጃ
+    extracted_link = Column(String(512), nullable=True) # ከመልዕክቱ የተወጣ ሊንክ
+    status = Column(String(20), default="pending", index=True) # pending, verified, rejected
+    is_processed = Column(Boolean, default=False)
+    
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class AdminNotification(Base):
+    """ለአድሚን (ለአንተ) የሚላኩ አስቀድመው የማሳወቂያ መልዕክቶች"""
+    __tablename__ = "admin_notifications"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    title = Column(String(128), nullable=False)
+    message = Column(Text, nullable=False)
+    link = Column(String(512), nullable=True) # የተመሳከረው ሊንክ
+    is_read = Column(Boolean, default=False, index=True)
+    priority = Column(String(10), default="normal") # normal, high, critical
+    
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
 
 # ============================================================
 # 8. AUDIT & SYSTEM LOGGING
@@ -323,7 +339,6 @@ class SystemAuditLog(Base):
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=True)
     
     created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
-
 
 # ============================================================
 # 9. INITIALIZATION
