@@ -1,7 +1,7 @@
 """
 ============================================================
  BingoGame - Enterprise Architecture Database (10x Edition)
- Features: Security, Webhook Logging, Admin Notifications
+ Features: Security, Webhook Logging, Admin Notifications, Streaks
 ============================================================
 """
 
@@ -110,6 +110,9 @@ class User(Base):
     cards = relationship("BingoCard", back_populates="user")
     transactions = relationship("Transaction", back_populates="user")
     tickets = relationship("SupportTicket", back_populates="user")
+    
+    # አዲስ የተጨመረ፡ የ Streak ግንኙነት
+    streaks = relationship("Streak", back_populates="user", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_user_active", "is_banned", "is_verified"),
@@ -278,6 +281,20 @@ class DailyReward(Base):
     )
 
 
+# አዲስ የተጨመረ፡ የ Streak ሞዴል
+class Streak(Base):
+    __tablename__ = "streaks"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=False)
+    current_streak = Column(Integer, default=1)
+    longest_streak = Column(Integer, default=1)
+    last_claimed_date = Column(Date, default=date.today)
+    created_at = Column(DateTime(timezone=True), default=utc_now)
+
+    user = relationship("User", back_populates="streaks")
+
+
 class PromoCode(Base):
     __tablename__ = "promo_codes"
 
@@ -294,33 +311,31 @@ class PromoCode(Base):
     is_active = Column(Boolean, default=True)
 
 # ============================================================
-# 7. WEBHOOK & SECURITY LOGS (አዲስ የተጨመሩ)
+# 7. WEBHOOK & SECURITY LOGS
 # ============================================================
 
 class WebhookLog(Base):
-    """ከ127.0.0.1 (Localhost) ወይም ከክፍያ ጌትዌይ የሚመጡ መልዕክቶችን እና ሊንኮችን ለማጣራት"""
     __tablename__ = "webhook_logs"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    source_ip = Column(String(45), nullable=False, index=True) # ለምሳሌ 127.0.0.1
-    payload = Column(JSON, nullable=False) # የመጣው መልዕክት ሙሉ መረጃ
-    extracted_link = Column(String(512), nullable=True) # ከመልዕክቱ የተወጣ ሊንክ
-    status = Column(String(20), default="pending", index=True) # pending, verified, rejected
+    source_ip = Column(String(45), nullable=False, index=True)
+    payload = Column(JSON, nullable=False)
+    extracted_link = Column(String(512), nullable=True)
+    status = Column(String(20), default="pending", index=True)
     is_processed = Column(Boolean, default=False)
     
     created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
 
 
 class AdminNotification(Base):
-    """ለአድሚን (ለአንተ) የሚላኩ አስቀድመው የማሳወቂያ መልዕክቶች"""
     __tablename__ = "admin_notifications"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     title = Column(String(128), nullable=False)
     message = Column(Text, nullable=False)
-    link = Column(String(512), nullable=True) # የተመሳከረው ሊንክ
+    link = Column(String(512), nullable=True)
     is_read = Column(Boolean, default=False, index=True)
-    priority = Column(String(10), default="normal") # normal, high, critical
+    priority = Column(String(10), default="normal")
     
     created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
 
