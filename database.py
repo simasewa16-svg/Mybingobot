@@ -787,7 +787,7 @@ class UserAchievement(Base):
 
 
 
-    )
+    
 
 
 class Streak(Base):
