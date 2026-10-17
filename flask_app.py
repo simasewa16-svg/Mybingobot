@@ -2,7 +2,7 @@
 ============================================================
  BingoGame - Enterprise Flask Application (100x Pro Max Edition)
  Architecture: Blueprints, Async Threading, Idempotency, Logging
- Fixed: Removed Streak import to resolve ImportError.
+ Fixed: Added init_db() to create tables on startup & restored Streak.
 ============================================================
 """
 
@@ -20,9 +20,9 @@ from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-# ከ database.py የሚመጡ ሞዴሎች (Streak ለጊዜው ተወግዷል)
+# ከ database.py የሚመጡ ሞዴሎች (init_db እና Streak ተጨምረዋል)
 from database import (
-    SessionLocal, User, Wallet, Transaction, SupportTicket, utc_now
+    SessionLocal, User, Wallet, Transaction, SupportTicket, Streak, utc_now, init_db, engine, Base
 )
 
 # ============================================================
@@ -32,6 +32,10 @@ load_dotenv()
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# 🚨 ዳታቤዙ ሰንጠረዦች መፈጠራቸውን ማረጋገጥ (ይህ ኮድ ሲነሳ ሰንጠረዦቹን ይፈጥራል)
+with app.app_context():
+    init_db()
 
 # 🚨 ቶከንህን እዚህ በቀጥታ አስገብተዋለሁ (ለደህንነት ግን በ Environment Variables መጠቀም ይመረጣል)
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8962566823:AAHYTr58QBRU85-HkeLb91M_gIOBzaTh7jw")
