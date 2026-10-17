@@ -2,7 +2,7 @@
 ============================================================
  BingoGame - Enterprise Architecture Database (10x Edition)
  Features: Security, Webhook Logging, Admin Notifications, Streaks
- Fixed: Absolute Path for SQLite to prevent "no such table" error
+ Fixed: SQLite BigInteger PK Auto-increment, Date Index issue, Absolute Path
 ============================================================
 """
 
@@ -24,7 +24,6 @@ from sqlalchemy.orm import (
 # ============================================================
 # 1. DATABASE CONFIGURATION & ENGINE
 # ============================================================
-# 🐛 Fix: Use absolute path for SQLite database to prevent path issues in WSGI
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DB_PATH = os.path.join(BASE_DIR, "bingobot.db")
 
@@ -65,6 +64,10 @@ def utc_now():
 def generate_uuid():
     return str(uuid.uuid4())
 
+# 🐛 Fix: SQLite doesn't auto-increment BigInteger primary keys. 
+# We use Integer for SQLite, and BigInteger for Postgres.
+BigIntPK = BigInteger().with_variant(Integer, "sqlite")
+
 # ============================================================
 # 2. CORE UTILITIES
 # ============================================================
@@ -86,7 +89,7 @@ def init_db():
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigIntPK, primary_key=True, autoincrement=True)
     telegram_id = Column(BigInteger, unique=True, nullable=False, index=True)
     username = Column(String(64), index=True)
     first_name = Column(String(128))
@@ -108,7 +111,8 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), default=utc_now)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
-    version_id = Column(Integer, nullable=False, default=1)
+    # 🐛 Fix: server_default ensures DB assigns '1' safely
+    version_id = Column(Integer, nullable=False, default=1, server_default=text("1"))
     __mapper_args__ = {"version_id_col": version_id}
 
     wallets = relationship("Wallet", back_populates="user", cascade="all, delete-orphan")
@@ -116,7 +120,6 @@ class User(Base):
     transactions = relationship("Transaction", back_populates="user")
     tickets = relationship("SupportTicket", back_populates="user")
     
-    # Streak ግንኙነት
     streaks = relationship("Streak", back_populates="user", cascade="all, delete-orphan")
 
     __table_args__ = (
@@ -127,7 +130,7 @@ class User(Base):
 class Wallet(Base):
     __tablename__ = "wallets"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigIntPK, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
     currency = Column(String(10), default="ETB")
     
@@ -150,7 +153,7 @@ class Wallet(Base):
 class LedgerEntry(Base):
     __tablename__ = "ledger_entries"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigIntPK, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
     entry_type = Column(String(30), nullable=False, index=True) 
     amount = Column(Numeric(18, 2), nullable=False) 
@@ -173,7 +176,7 @@ class LedgerEntry(Base):
 class BingoGame(Base):
     __tablename__ = "bingo_games"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigIntPK, primary_key=True, autoincrement=True)
     game_id_str = Column(String(36), default=generate_uuid, unique=True, index=True)
     status = Column(String(20), default="lobby", index=True) 
     game_mode = Column(String(20), default="classic") 
@@ -202,7 +205,7 @@ class BingoGame(Base):
 class BingoCard(Base):
     __tablename__ = "bingo_cards"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigIntPK, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
     game_id = Column(BigInteger, ForeignKey("bingo_games.id"), nullable=False, index=True)
     
@@ -229,7 +232,7 @@ class BingoCard(Base):
 class Transaction(Base):
     __tablename__ = "transactions"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigIntPK, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
     
     payment_gateway = Column(String(30), default="Chapa") 
@@ -255,7 +258,7 @@ class Transaction(Base):
 class SupportTicket(Base):
     __tablename__ = "support_tickets"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigIntPK, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
     subject = Column(String(256), nullable=False)
     message = Column(Text, nullable=False)
@@ -274,14 +277,16 @@ class SupportTicket(Base):
 class DailyReward(Base):
     __tablename__ = "daily_rewards"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigIntPK, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
     day_number = Column(Integer, nullable=False)
     reward_amount = Column(Numeric(18, 2), nullable=False)
     claimed_at = Column(DateTime(timezone=True), default=utc_now)
+    # 🐛 Fix: Use a dedicated Date column instead of func.date in Index
+    claimed_date = Column(Date, default=date.today, nullable=False)
 
     __table_args__ = (
-        Index('uq_user_daily_reward', 'user_id', 'day_number', func.date('claimed_at'), unique=True),
+        UniqueConstraint("user_id", "day_number", "claimed_date", name="uq_user_daily_reward"),
         CheckConstraint("day_number BETWEEN 1 AND 7", name="chk_day_number"),
     )
 
@@ -289,7 +294,7 @@ class DailyReward(Base):
 class Streak(Base):
     __tablename__ = "streaks"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigIntPK, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=False)
     current_streak = Column(Integer, default=1)
     longest_streak = Column(Integer, default=1)
@@ -302,7 +307,7 @@ class Streak(Base):
 class PromoCode(Base):
     __tablename__ = "promo_codes"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(BigIntPK, primary_key=True, autoincrement=True)
     code = Column(String(32), unique=True, index=True)
     bonus_type = Column(String(20)) 
     value = Column(Numeric(18, 2), nullable=False)
@@ -321,7 +326,7 @@ class PromoCode(Base):
 class WebhookLog(Base):
     __tablename__ = "webhook_logs"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigIntPK, primary_key=True, autoincrement=True)
     source_ip = Column(String(45), nullable=False, index=True)
     payload = Column(JSON, nullable=False)
     extracted_link = Column(String(512), nullable=True)
@@ -334,7 +339,7 @@ class WebhookLog(Base):
 class AdminNotification(Base):
     __tablename__ = "admin_notifications"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigIntPK, primary_key=True, autoincrement=True)
     title = Column(String(128), nullable=False)
     message = Column(Text, nullable=False)
     link = Column(String(512), nullable=True)
@@ -350,7 +355,7 @@ class AdminNotification(Base):
 class SystemAuditLog(Base):
     __tablename__ = "system_audit_logs"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigIntPK, primary_key=True, autoincrement=True)
     action_type = Column(String(64), nullable=False, index=True) 
     description = Column(Text, nullable=False)
     severity = Column(String(20), default="info", index=True) 
