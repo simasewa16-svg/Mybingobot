@@ -6,7 +6,7 @@ from database import init_db
 app = Flask(__name__)
 
 # 1. ቦት ቶከን
-BOT_TOKEN = os.getenv("BOT_TOKEN", "የአንተ_ቦት_ቶከን_እዚህ_ይገባል")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8962566823:AAHYTr58QBRU85-HkeLb91M_gIOBzaTh7jw")
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 
 # 2. ዳታቤዙን አንድ ጊዜ ፍጠር
