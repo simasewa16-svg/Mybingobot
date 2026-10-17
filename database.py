@@ -783,7 +783,7 @@ class UserAchievement(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "achievement_id", name="uq_user_achievement"),
-    )
+    
 
 
 
