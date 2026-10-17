@@ -111,7 +111,6 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), default=utc_now)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
-    # 🐛 Fix: server_default ensures DB assigns '1' safely
     version_id = Column(Integer, nullable=False, default=1, server_default=text("1"))
     __mapper_args__ = {"version_id_col": version_id}
 
@@ -119,7 +118,6 @@ class User(Base):
     cards = relationship("BingoCard", back_populates="user")
     transactions = relationship("Transaction", back_populates="user")
     tickets = relationship("SupportTicket", back_populates="user")
-    
     streaks = relationship("Streak", back_populates="user", cascade="all, delete-orphan")
 
     __table_args__ = (
@@ -282,7 +280,6 @@ class DailyReward(Base):
     day_number = Column(Integer, nullable=False)
     reward_amount = Column(Numeric(18, 2), nullable=False)
     claimed_at = Column(DateTime(timezone=True), default=utc_now)
-    # 🐛 Fix: Use a dedicated Date column instead of func.date in Index
     claimed_date = Column(Date, default=date.today, nullable=False)
 
     __table_args__ = (
