@@ -2,7 +2,7 @@
 ============================================================
  BingoGame - Enterprise Flask Application (100x Pro Max Edition)
  Architecture: Blueprints, Async Threading, Idempotency, Logging
- Fixed: Telegram API URL, Env Variables, Phone Normalization
+ Fixed: Removed Streak import to resolve ImportError.
 ============================================================
 """
 
@@ -20,9 +20,9 @@ from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-# ከ database.py የሚመጡ ሞዴሎች
+# ከ database.py የሚመጡ ሞዴሎች (Streak ለጊዜው ተወግዷል)
 from database import (
-    SessionLocal, User, Wallet, Transaction, SupportTicket, Streak, utc_now
+    SessionLocal, User, Wallet, Transaction, SupportTicket, utc_now
 )
 
 # ============================================================
@@ -75,7 +75,6 @@ def send_async_telegram(chat_id, text, parse_mode="HTML", reply_markup=None):
             logger.warning("ቴሌግራም ቶከን ወይም Chat ID አልተገኘም።")
             return
         
-        # 🐛 Bug Fix: ትክክለኛው የቴሌግራም API አድራሻ
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         payload = {"chat_id": chat_id, "text": text, "parse_mode": parse_mode}
         if reply_markup:
@@ -114,7 +113,6 @@ def telebirr_webhook():
     if not data:
         return jsonify({"status": "error", "message": "Invalid JSON"}), 400
 
-    # የተለያዩ የ JSON ቁልፍ ስሞች ሊኖሩ ስለሚችሉ ሁለቱንም ፈትነን እንጠቀም
     out_trade_no = data.get("outTradeNo") or data.get("reference")
     msisdn = data.get("msisdn") or data.get("phone")
     amount_str = data.get("amount") or data.get("totalAmount") or "0.00"
@@ -218,7 +216,6 @@ def telegram_webhook():
                 total_users = db.query(User).count()
                 total_deposits = db.query(Transaction).filter_by(status="success", transaction_type="deposit").count()
                 
-                # አጠቃላይ ባላንስን ማስላት
                 total_balance = sum([w.balance for w in db.query(Wallet).all()])
                 
                 reply = (
