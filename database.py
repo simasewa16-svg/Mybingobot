@@ -786,30 +786,14 @@ class UserAchievement(Base):
     )
 
 
-class DailyReward(Base):
-    __tablename__ = "daily_rewards"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
-    day_number = Column(Integer, nullable=False)
-    reward_amount = Column(Numeric(18, 2), nullable=False)
-    claimed_at = Column(DateTime, default=datetime.utcnow)
-
-    __table_args__ = (
-        UniqueConstraint("user_id", "day_number", func.date(claimed_at),
-                         name="uq_user_daily_reward"),
-        CheckConstraint("day_number BETWEEN 1 AND 7", name="chk_day_number"),
     )
 
 
 class Streak(Base):
     __tablename__ = "streaks"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=False)
-    current_streak = Column(Integer, default=0)
-    max_streak = Column(Integer, default=0)
-    last_login_date = Column(Date)
+    id = Column(BigInteger, p
     total_days = Column(Integer, default=0)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
