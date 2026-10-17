@@ -2,6 +2,7 @@
 ============================================================
  BingoGame - Enterprise Architecture Database (10x Edition)
  Features: Security, Webhook Logging, Admin Notifications, Streaks
+ Fixed: Absolute Path for SQLite to prevent "no such table" error
 ============================================================
 """
 
@@ -23,7 +24,11 @@ from sqlalchemy.orm import (
 # ============================================================
 # 1. DATABASE CONFIGURATION & ENGINE
 # ============================================================
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./bingobot.db")
+# 🐛 Fix: Use absolute path for SQLite database to prevent path issues in WSGI
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_DB_PATH = os.path.join(BASE_DIR, "bingobot.db")
+
+DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
 
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
@@ -111,7 +116,7 @@ class User(Base):
     transactions = relationship("Transaction", back_populates="user")
     tickets = relationship("SupportTicket", back_populates="user")
     
-    # አዲስ የተጨመረ፡ የ Streak ግንኙነት
+    # Streak ግንኙነት
     streaks = relationship("Streak", back_populates="user", cascade="all, delete-orphan")
 
     __table_args__ = (
@@ -281,7 +286,6 @@ class DailyReward(Base):
     )
 
 
-# አዲስ የተጨመረ፡ የ Streak ሞዴል
 class Streak(Base):
     __tablename__ = "streaks"
 
